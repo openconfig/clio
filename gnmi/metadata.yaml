@@ -1,0 +1,7 @@
+type: gnmi
+
+status:
+  class: exporter
+  stability:
+    beta: [metrics]
+  distributions: [core, contrib]
