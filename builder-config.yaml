@@ -1,0 +1,13 @@
+dist:
+  name: clio
+  module: github.com/openconfig/clio
+  description: An otel collector that provides telemetry over gNMI.
+  output_path: ./collector
+
+receivers:
+  - gomod:
+      go.opentelemetry.io/collector/receiver/otlpreceiver v0.94.0
+
+exporters:
+  - gomod:
+     go.opentelemetry.io/collector/exporter/debugexporter v0.94.0

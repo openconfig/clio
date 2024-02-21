@@ -1,0 +1,4 @@
+addr: localhost:10
+sep: "/"
+target_name: "target"
+buffer_size: 10

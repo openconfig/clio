@@ -1,0 +1,7 @@
+type: gnmipath
+
+status:
+  class: processor
+  stability:
+    beta: [metrics]
+  distributions: [core, contrib]
