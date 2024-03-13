@@ -3,9 +3,12 @@ module github.com/openconfig/clio
 go 1.22
 
 require (
+	github.com/google/go-cmp v0.6.0
+	github.com/openconfig/gnmi v0.10.0
 	github.com/openconfig/magna v0.0.0-20240206105800-0e9dcc90651a
 	github.com/stretchr/testify v1.8.4
 	go.opentelemetry.io/collector/component v0.94.1
+	go.opentelemetry.io/collector/confmap v0.94.1
 	go.opentelemetry.io/collector/connector v0.94.1
 	go.opentelemetry.io/collector/consumer v0.94.1
 	go.opentelemetry.io/collector/exporter v0.94.1
@@ -17,6 +20,9 @@ require (
 	go.opentelemetry.io/collector/receiver/otlpreceiver v0.94.1
 	go.opentelemetry.io/otel/metric v1.23.0
 	go.opentelemetry.io/otel/trace v1.23.0
+	go.uber.org/zap v1.26.0
+	google.golang.org/grpc v1.61.0
+	k8s.io/klog/v2 v2.100.1
 )
 
 require (
@@ -35,7 +41,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
@@ -54,7 +59,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/mostynb/go-grpc-compression v1.2.2 // indirect
 	github.com/open-traffic-generator/snappi/gosnappi v0.13.7 // indirect
-	github.com/openconfig/gnmi v0.10.0 // indirect
 	github.com/openconfig/goyang v1.4.5 // indirect
 	github.com/openconfig/ygot v0.29.18 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -85,7 +89,6 @@ require (
 	go.opentelemetry.io/collector/config/configtelemetry v0.94.1 // indirect
 	go.opentelemetry.io/collector/config/configtls v0.94.1 // indirect
 	go.opentelemetry.io/collector/config/internal v0.94.1 // indirect
-	go.opentelemetry.io/collector/confmap v0.94.1 // indirect
 	go.opentelemetry.io/collector/extension/auth v0.94.1 // indirect
 	go.opentelemetry.io/collector/featuregate v1.1.0 // indirect
 	go.opentelemetry.io/collector/semconv v0.94.1 // indirect
@@ -108,7 +111,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.23.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.1.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a // indirect
 	golang.org/x/net v0.20.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
@@ -116,8 +118,6 @@ require (
 	gonum.org/v1/gonum v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240102182953-50ed04b92917 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240116215550-a9fa1716bcac // indirect
-	google.golang.org/grpc v1.61.0 // indirect
-	google.golang.org/protobuf v1.32.0 // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/klog/v2 v2.100.1 // indirect
 )
