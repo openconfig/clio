@@ -25,28 +25,70 @@ import (
 )
 
 func TestHandleMetrics(t *testing.T) {
-	g := &GNMI{
-		cfg: &Config{
-			TargetName: "target",
-			Sep:        "/",
+	tests := []struct {
+		name         string
+		inCnt        int
+		InMetricType pmetric.MetricType
+		wantCnt      int
+	}{
+		{
+			name:         "gauge-10",
+			inCnt:        10,
+			InMetricType: pmetric.MetricTypeGauge,
+			wantCnt:      20,
 		},
-		metricCh: make(chan *pmetric.Metrics, 10),
+		{
+			name:         "sum-10",
+			inCnt:        10,
+			InMetricType: pmetric.MetricTypeSum,
+			wantCnt:      20,
+		},
+		{
+			name:         "histogram-10",
+			inCnt:        10,
+			InMetricType: pmetric.MetricTypeHistogram,
+			wantCnt:      20,
+		},
+		{
+			name:         "exponential-histogram-10",
+			inCnt:        10,
+			InMetricType: pmetric.MetricTypeExponentialHistogram,
+			wantCnt:      20,
+		},
+		{
+			name:         "summary-10",
+			inCnt:        10,
+			InMetricType: pmetric.MetricTypeSummary,
+			wantCnt:      20,
+		},
 	}
-	var n *gpb.Notification
-	updateFn := func(notif *gpb.Notification) error {
-		n = notif
-		return nil
-	}
-	td := GenerateMetrics(20)
-	g.handleMetrics(nil, updateFn, "", nil)
-	if err := g.storeMetric(context.Background(), td); err != nil {
-		t.Errorf("storeMetric returned error: %v", err)
-	}
-	close(g.metricCh)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &GNMI{
+				cfg: &Config{
+					TargetName: "target",
+					Sep:        "/",
+				},
+				metricCh: make(chan *pmetric.Metrics, 10),
+			}
+			var n *gpb.Notification
+			updateFn := func(notif *gpb.Notification) error {
+				n = notif
+				return nil
+			}
 
-	time.Sleep(time.Second)
-	if len(n.Update) != 40 {
-		t.Errorf("missing updates: want 40 got %d", len(n.Update))
+			td := GenerateMetrics(tc.inCnt, tc.InMetricType)
+			g.handleMetrics(nil, updateFn, "", nil)
+			if err := g.storeMetric(context.Background(), td); err != nil {
+				t.Errorf("storeMetric returned error: %v", err)
+			}
+			close(g.metricCh)
+
+			time.Sleep(time.Second)
+			if len(n.Update) != tc.wantCnt {
+				t.Errorf("missing updates: want %d got %d", tc.wantCnt, len(n.Update))
+			}
+		})
 	}
 }
 
@@ -56,16 +98,31 @@ var (
 )
 
 const (
-	TestSumIntMetricName = "sum/int"
+	TestSumIntMetricName               = "sum/int_and_double"
+	TestHistogramMetricName            = "histogram/double"
+	TestExponentialHistogramMetricName = "exponential-histogram/double"
+	TestGaugeMetricName                = "gauge/int_and_double"
+	TestSummaryMetricName              = "summary/double"
 )
 
-func GenerateMetrics(count int) pmetric.Metrics {
+func GenerateMetrics(count int, ty pmetric.MetricType) pmetric.Metrics {
 	md := generateMetricsOneEmptyInstrumentationScope()
 	ms := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
 	ms.EnsureCapacity(count)
 
 	for i := 0; i < count; i++ {
-		initSumIntMetric(ms.AppendEmpty())
+		switch ty {
+		case pmetric.MetricTypeGauge:
+			initGaugeMetric(ms.AppendEmpty())
+		case pmetric.MetricTypeSum:
+			initSumMetric(ms.AppendEmpty())
+		case pmetric.MetricTypeHistogram:
+			initHistogramMetric(ms.AppendEmpty())
+		case pmetric.MetricTypeExponentialHistogram:
+			initExponentialHistogramMetric(ms.AppendEmpty())
+		case pmetric.MetricTypeSummary:
+			initSummaryMetric(ms.AppendEmpty())
+		}
 	}
 	return md
 }
@@ -81,18 +138,123 @@ func generateMetricsOneEmptyInstrumentationScope() pmetric.Metrics {
 	return md
 }
 
-func initSumIntMetric(im pmetric.Metric) {
+func initHistogramMetric(im pmetric.Metric) {
+	initMetric(im, TestHistogramMetricName, pmetric.MetricTypeHistogram)
+
+	idps := im.Histogram().DataPoints()
+	idp0 := idps.AppendEmpty()
+	idp0.SetStartTimestamp(metricStartTimestamp)
+	idp0.SetTimestamp(metricTimestamp)
+
+	// Buckets are (-inf, 1), [1, 10), [10, 100), [100, inf)
+	idp0.ExplicitBounds().EnsureCapacity(3)
+	idp0.ExplicitBounds().Append(1.0, 10.0, 100.0)
+	idp0.BucketCounts().EnsureCapacity(4)
+	idp0.BucketCounts().Append(0, 10, 100, 0)
+	idp0.SetCount(110)
+	idp0.SetMax(91)
+	idp0.SetMin(1)
+	idp0.SetSum(5555) // drawn from 10*[1, 10) + 100*[10, 100)
+
+	idp1 := idps.AppendEmpty()
+	idp1.SetStartTimestamp(metricStartTimestamp)
+	idp1.SetTimestamp(metricTimestamp)
+
+	// Buckets are (-inf, 1), [1, 10), [10, 100), [100, inf)
+	idp1.ExplicitBounds().EnsureCapacity(3)
+	idp1.ExplicitBounds().Append(1.0, 10.0, 100.0)
+	idp1.BucketCounts().EnsureCapacity(4)
+	idp1.BucketCounts().Append(0, 20, 200, 0)
+	idp1.SetCount(220)
+	idp1.SetMax(92)
+	idp1.SetMin(2)
+	idp1.SetSum(7777) // drawn from 10*[1, 10) + 100*[10, 100)
+}
+
+func initExponentialHistogramMetric(im pmetric.Metric) {
+	initMetric(im, TestExponentialHistogramMetricName, pmetric.MetricTypeExponentialHistogram)
+
+	// The histogram and the exponential histogram are identical except for the bucket scale, see:
+	// https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponential-scale
+	idps := im.ExponentialHistogram().DataPoints()
+	idp0 := idps.AppendEmpty()
+	idp0.SetStartTimestamp(metricStartTimestamp)
+	idp0.SetTimestamp(metricTimestamp)
+
+	// Buckets are (1, 1.09051], (1.09051, 1.18921], (1.18921, 1.29684], ...
+	idp0.SetScale(3)
+	idp0.Negative().BucketCounts().EnsureCapacity(4)
+	idp0.Negative().BucketCounts().Append(1, 2, 3, 0)
+	idp0.SetCount(6)
+	idp0.SetMax(3)
+	idp0.SetMin(1)
+	idp0.SetSum(7.1)
+
+	idp1 := idps.AppendEmpty()
+	idp1.SetStartTimestamp(metricStartTimestamp)
+	idp1.SetTimestamp(metricTimestamp)
+
+	idp1.SetScale(3)
+	idp1.Negative().BucketCounts().EnsureCapacity(4)
+	idp1.Negative().BucketCounts().Append(3, 2, 2, 0)
+	idp1.SetCount(7)
+	idp1.SetMax(3)
+	idp1.SetMin(2)
+	idp1.SetSum(7.95)
+}
+
+func initSumMetric(im pmetric.Metric) {
 	initMetric(im, TestSumIntMetricName, pmetric.MetricTypeSum)
 
 	idps := im.Sum().DataPoints()
+
+	// Integer data point.
 	idp0 := idps.AppendEmpty()
 	idp0.SetStartTimestamp(metricStartTimestamp)
 	idp0.SetTimestamp(metricTimestamp)
 	idp0.SetIntValue(123)
+
+	// Double data point.
 	idp1 := idps.AppendEmpty()
 	idp1.SetStartTimestamp(metricStartTimestamp)
 	idp1.SetTimestamp(metricTimestamp)
-	idp1.SetIntValue(456)
+	idp1.SetDoubleValue(456.7)
+}
+
+func initGaugeMetric(im pmetric.Metric) {
+	initMetric(im, TestGaugeMetricName, pmetric.MetricTypeGauge)
+
+	idps := im.Gauge().DataPoints()
+
+	// Integer data point.
+	idp0 := idps.AppendEmpty()
+	idp0.SetStartTimestamp(metricStartTimestamp)
+	idp0.SetTimestamp(metricTimestamp)
+	idp0.SetIntValue(123)
+
+	// Double data point.
+	idp1 := idps.AppendEmpty()
+	idp1.SetStartTimestamp(metricStartTimestamp)
+	idp1.SetTimestamp(metricTimestamp)
+	idp1.SetDoubleValue(456.0)
+}
+
+func initSummaryMetric(im pmetric.Metric) {
+	initMetric(im, TestSummaryMetricName, pmetric.MetricTypeSummary)
+
+	idps := im.Summary().DataPoints()
+	idp0 := idps.AppendEmpty()
+	idp0.SetStartTimestamp(metricStartTimestamp)
+	idp0.SetTimestamp(metricTimestamp)
+	qv0 := idp0.QuantileValues().AppendEmpty()
+	qv0.SetQuantile(0.95)
+	qv0.SetValue(9.5)
+	idp1 := idps.AppendEmpty()
+	idp1.SetStartTimestamp(metricStartTimestamp)
+	idp1.SetTimestamp(metricTimestamp)
+	qv1 := idp1.QuantileValues().AppendEmpty()
+	qv1.SetQuantile(0.9)
+	qv1.SetValue(9.0)
 }
 
 func initMetric(m pmetric.Metric, name string, ty pmetric.MetricType) {
