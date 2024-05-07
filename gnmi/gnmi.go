@@ -183,6 +183,31 @@ func marshalSummaryDataPoint(p *pmetric.SummaryDataPoint) (*anypb.Any, error) {
 	return any, nil
 }
 
+type simpleNumberDataPoint interface {
+	ValueType() pmetric.NumberDataPointValueType
+	IntValue() int64
+	DoubleValue() float64
+}
+
+func typedValueFromMetric(p simpleNumberDataPoint) *gpb.TypedValue {
+	switch p.ValueType() {
+	case pmetric.NumberDataPointValueTypeInt:
+		return &gpb.TypedValue{
+			Value: &gpb.TypedValue_IntVal{
+				IntVal: p.IntValue(),
+			},
+		}
+	case pmetric.NumberDataPointValueTypeDouble:
+		return &gpb.TypedValue{
+			Value: &gpb.TypedValue_DoubleVal{
+				DoubleVal: p.DoubleValue(),
+			},
+		}
+	default:
+		return nil
+	}
+}
+
 // handleMetrics iterates over all received metrics and converts them into a
 // gNMI update. This set of updates are then packed into a gNMI notfication
 // and sent to the telemetry server.
@@ -216,23 +241,8 @@ func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target stri
 							gaugeMetrics := m.Gauge().DataPoints()
 							for l := 0; l < gaugeMetrics.Len(); l++ {
 								gaugeMetric := gaugeMetrics.At(l)
-
-								// Data can be integers or doubles.
-								var val *gpb.TypedValue
-								switch gaugeMetric.ValueType() {
-								case pmetric.NumberDataPointValueTypeInt:
-									val = &gpb.TypedValue{
-										Value: &gpb.TypedValue_IntVal{
-											IntVal: gaugeMetric.IntValue(),
-										},
-									}
-								case pmetric.NumberDataPointValueTypeDouble:
-									val = &gpb.TypedValue{
-										Value: &gpb.TypedValue_DoubleVal{
-											DoubleVal: gaugeMetric.DoubleValue(),
-										},
-									}
-								case pmetric.NumberDataPointValueTypeEmpty:
+								val := typedValueFromMetric(gaugeMetric)
+								if val == nil {
 									continue
 								}
 								updates = append(updates, &gpb.Update{
@@ -247,22 +257,8 @@ func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target stri
 							sumMetrics := m.Sum().DataPoints()
 							for l := 0; l < sumMetrics.Len(); l++ {
 								sumMetric := sumMetrics.At(l)
-								// Data can be integers or doubles.
-								var val *gpb.TypedValue
-								switch sumMetric.ValueType() {
-								case pmetric.NumberDataPointValueTypeInt:
-									val = &gpb.TypedValue{
-										Value: &gpb.TypedValue_IntVal{
-											IntVal: sumMetric.IntValue(),
-										},
-									}
-								case pmetric.NumberDataPointValueTypeDouble:
-									val = &gpb.TypedValue{
-										Value: &gpb.TypedValue_DoubleVal{
-											DoubleVal: sumMetric.DoubleValue(),
-										},
-									}
-								case pmetric.NumberDataPointValueTypeEmpty:
+								val := typedValueFromMetric(sumMetric)
+								if val == nil {
 									continue
 								}
 								updates = append(updates, &gpb.Update{
