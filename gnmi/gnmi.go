@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	"time"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 	ompb "go.opentelemetry.io/proto/otlp/metrics/v1"
@@ -29,6 +28,7 @@ import (
 	"github.com/openconfig/magna/lwotgtelem"
 	"github.com/openconfig/magna/lwotgtelem/gnmit"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -107,7 +107,7 @@ func (g *GNMI) storeMetric(ctx context.Context, md pmetric.Metrics) error {
 	return nil
 }
 
-func marshalHistogramDataPoint(p *pmetric.HistogramDataPoint) (*anypb.Any, error) {
+func typedValueFromHistogramDataPoint(p *pmetric.HistogramDataPoint) (*gpb.TypedValue, error) {
 	hp := &ompb.HistogramDataPoint{
 		Count:          p.Count(),
 		BucketCounts:   p.BucketCounts().AsRaw(),
@@ -127,10 +127,15 @@ func marshalHistogramDataPoint(p *pmetric.HistogramDataPoint) (*anypb.Any, error
 	if err != nil {
 		return nil, err
 	}
-	return any, nil
+
+	return &gpb.TypedValue{
+		Value: &gpb.TypedValue_AnyVal{
+			AnyVal: any,
+		},
+	}, nil
 }
 
-func marshalExponentialHistogramDataPoint(p *pmetric.ExponentialHistogramDataPoint) (*anypb.Any, error) {
+func typedValueFromExponentialHistogramDataPoint(p *pmetric.ExponentialHistogramDataPoint) (*gpb.TypedValue, error) {
 	hp := &ompb.ExponentialHistogramDataPoint{
 		Count: p.Count(),
 		Scale: p.Scale(),
@@ -159,10 +164,15 @@ func marshalExponentialHistogramDataPoint(p *pmetric.ExponentialHistogramDataPoi
 	if err != nil {
 		return nil, err
 	}
-	return any, nil
+
+	return &gpb.TypedValue{
+		Value: &gpb.TypedValue_AnyVal{
+			AnyVal: any,
+		},
+	}, nil
 }
 
-func marshalSummaryDataPoint(p *pmetric.SummaryDataPoint) (*anypb.Any, error) {
+func typedValueFromSummaryDataPoint(p *pmetric.SummaryDataPoint) (*gpb.TypedValue, error) {
 	qval := make([]*ompb.SummaryDataPoint_ValueAtQuantile, 0, p.QuantileValues().Len())
 	for i := 0; i < p.QuantileValues().Len(); i++ {
 		qval = append(qval, &ompb.SummaryDataPoint_ValueAtQuantile{
@@ -180,7 +190,12 @@ func marshalSummaryDataPoint(p *pmetric.SummaryDataPoint) (*anypb.Any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return any, nil
+
+	return &gpb.TypedValue{
+		Value: &gpb.TypedValue_AnyVal{
+			AnyVal: any,
+		},
+	}, nil
 }
 
 type simpleNumberDataPoint interface {
@@ -189,7 +204,7 @@ type simpleNumberDataPoint interface {
 	DoubleValue() float64
 }
 
-func typedValueFromMetric(p simpleNumberDataPoint) *gpb.TypedValue {
+func typedValueFromNumericMetric(p simpleNumberDataPoint) *gpb.TypedValue {
 	switch p.ValueType() {
 	case pmetric.NumberDataPointValueTypeInt:
 		return &gpb.TypedValue{
@@ -208,6 +223,103 @@ func typedValueFromMetric(p simpleNumberDataPoint) *gpb.TypedValue {
 	}
 }
 
+// typedValuesFromMetric returns a list of typed values based on a metric's values.
+func (g *GNMI) typedValuesAndTimesFromMetric(m pmetric.Metric) ([]*gpb.TypedValue, []pcommon.Timestamp) {
+	var tvals []*gpb.TypedValue
+	var tstamps []pcommon.Timestamp
+	switch m.Type() {
+	case pmetric.MetricTypeEmpty:
+		g.logger.Error("empty metric type", zap.String("name", m.Name()))
+		return nil, nil
+	case pmetric.MetricTypeGauge:
+		gaugeMetrics := m.Gauge().DataPoints()
+		for l := 0; l < gaugeMetrics.Len(); l++ {
+			gaugeMetric := gaugeMetrics.At(l)
+			val := typedValueFromNumericMetric(gaugeMetric)
+			if val == nil {
+				g.logger.Error("found numeric metric value with type other than int or double", zap.String("name", m.Name()))
+				continue
+			}
+			tvals = append(tvals, val)
+			tstamps = append(tstamps, gaugeMetric.Timestamp())
+		}
+	case pmetric.MetricTypeSum:
+		sumMetrics := m.Sum().DataPoints()
+		for l := 0; l < sumMetrics.Len(); l++ {
+			sumMetric := sumMetrics.At(l)
+			val := typedValueFromNumericMetric(sumMetric)
+			if val == nil {
+				g.logger.Error("found numeric metric value with type other than int or double", zap.String("name", m.Name()))
+				continue
+			}
+			tvals = append(tvals, val)
+			tstamps = append(tstamps, sumMetric.Timestamp())
+		}
+	case pmetric.MetricTypeHistogram:
+		histMetrics := m.Histogram().DataPoints()
+		for l := 0; l < histMetrics.Len(); l++ {
+			histMetric := histMetrics.At(l)
+			val, err := typedValueFromHistogramDataPoint(&histMetric)
+			if err != nil {
+				g.logger.Error("failed to marshal histogram metric", zap.String("name", m.Name()), zap.Error(err))
+				continue
+			}
+			tvals = append(tvals, val)
+			tstamps = append(tstamps, histMetric.Timestamp())
+		}
+	case pmetric.MetricTypeExponentialHistogram:
+		histMetrics := m.ExponentialHistogram().DataPoints()
+		for l := 0; l < histMetrics.Len(); l++ {
+			histMetric := histMetrics.At(l)
+			val, err := typedValueFromExponentialHistogramDataPoint(&histMetric)
+			if err != nil {
+				g.logger.Error("failed to marshal exponential histogram metric", zap.String("name", m.Name()), zap.Error(err))
+				continue
+			}
+			tvals = append(tvals, val)
+			tstamps = append(tstamps, histMetric.Timestamp())
+		}
+	case pmetric.MetricTypeSummary:
+		sumMetrics := m.Summary().DataPoints()
+		for l := 0; l < sumMetrics.Len(); l++ {
+			sumMetric := sumMetrics.At(l)
+			val, err := typedValueFromSummaryDataPoint(&sumMetric)
+			if err != nil {
+				g.logger.Error("failed to marshal summary metric", zap.String("name", m.Name()), zap.Error(err))
+				continue
+			}
+			tvals = append(tvals, val)
+			tstamps = append(tstamps, sumMetric.Timestamp())
+		}
+	default:
+		g.logger.Error("unsupported metric type", zap.String("name", m.Name()), zap.String("type", m.Type().String()))
+	}
+	return tvals, tstamps
+}
+
+func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
+	var notis []*gpb.Notification
+	values, timestamps := g.typedValuesAndTimesFromMetric(p)
+	if len(values) == 0 {
+		return nil
+	}
+
+	for i, val := range values {
+		notis = append(notis, &gpb.Notification{
+			Timestamp: timestamps[i].AsTime().Unix(),
+			Update: []*gpb.Update{
+				&gpb.Update{
+					Path: &gpb.Path{
+						Elem: g.toPathElems(p.Name()),
+					},
+					Val: val,
+				},
+			},
+		})
+	}
+	return notis
+}
+
 // handleMetrics iterates over all received metrics and converts them into a
 // gNMI update. This set of updates are then packed into a gNMI notfication
 // and sent to the telemetry server.
@@ -215,7 +327,7 @@ func typedValueFromMetric(p simpleNumberDataPoint) *gpb.TypedValue {
 func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target string, cleanup func()) error {
 	go func() {
 		for ms := range g.metricCh {
-			var updates []*gpb.Update
+			var notis []*gpb.Notification
 
 			// Iterate over all resources (e.g., app).
 			rms := ms.ResourceMetrics()
@@ -231,128 +343,18 @@ func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target stri
 					ms := ilm.Metrics()
 					for k := 0; k < ms.Len(); k++ {
 						m := ms.At(k)
-
-						// Handle each metric type.
-						switch m.Type() {
-						case pmetric.MetricTypeEmpty:
-							g.logger.Error("empty metric type", zap.String("name", m.Name()))
-							continue
-						case pmetric.MetricTypeGauge:
-							gaugeMetrics := m.Gauge().DataPoints()
-							for l := 0; l < gaugeMetrics.Len(); l++ {
-								gaugeMetric := gaugeMetrics.At(l)
-								val := typedValueFromMetric(gaugeMetric)
-								if val == nil {
-									continue
-								}
-								updates = append(updates, &gpb.Update{
-									Path: &gpb.Path{
-										Elem:   g.toPathElems(m.Name()),
-										Target: g.cfg.TargetName,
-									},
-									Val: val,
-								})
-							}
-						case pmetric.MetricTypeSum:
-							sumMetrics := m.Sum().DataPoints()
-							for l := 0; l < sumMetrics.Len(); l++ {
-								sumMetric := sumMetrics.At(l)
-								val := typedValueFromMetric(sumMetric)
-								if val == nil {
-									continue
-								}
-								updates = append(updates, &gpb.Update{
-									Path: &gpb.Path{
-										Elem:   g.toPathElems(m.Name()),
-										Target: g.cfg.TargetName,
-									},
-									Val: val,
-								})
-							}
-						case pmetric.MetricTypeHistogram:
-							histMetrics := m.Histogram().DataPoints()
-							for l := 0; l < histMetrics.Len(); l++ {
-								histMetric := histMetrics.At(l)
-								any, err := marshalHistogramDataPoint(&histMetric)
-								if err != nil {
-									g.logger.Error("failed to marshal histogram metric", zap.Error(err))
-									continue
-								}
-								updates = append(updates, &gpb.Update{
-									Path: &gpb.Path{
-										Elem:   g.toPathElems(m.Name()),
-										Target: g.cfg.TargetName,
-									},
-									Val: &gpb.TypedValue{
-										Value: &gpb.TypedValue_AnyVal{
-											AnyVal: any,
-										},
-									},
-								})
-							}
-						case pmetric.MetricTypeExponentialHistogram:
-							histMetrics := m.ExponentialHistogram().DataPoints()
-							for l := 0; l < histMetrics.Len(); l++ {
-								histMetric := histMetrics.At(l)
-								any, err := marshalExponentialHistogramDataPoint(&histMetric)
-								if err != nil {
-									g.logger.Error("failed to marshal exponential histogram metric", zap.Error(err))
-									continue
-								}
-								updates = append(updates, &gpb.Update{
-									Path: &gpb.Path{
-										Elem:   g.toPathElems(m.Name()),
-										Target: g.cfg.TargetName,
-									},
-									Val: &gpb.TypedValue{
-										Value: &gpb.TypedValue_AnyVal{
-											AnyVal: any,
-										},
-									},
-								})
-							}
-						case pmetric.MetricTypeSummary:
-							summaryMetrics := m.Summary().DataPoints()
-							for l := 0; l < summaryMetrics.Len(); l++ {
-								summaryMetric := summaryMetrics.At(l)
-								any, err := marshalSummaryDataPoint(&summaryMetric)
-								if err != nil {
-									g.logger.Error("failed to marshal summary metric", zap.Error(err))
-									continue
-								}
-								updates = append(updates, &gpb.Update{
-									Path: &gpb.Path{
-										Elem:   g.toPathElems(m.Name()),
-										Target: g.cfg.TargetName,
-									},
-									Val: &gpb.TypedValue{
-										Value: &gpb.TypedValue_AnyVal{
-											AnyVal: any,
-										},
-									},
-								})
-							}
-						}
+						notis = append(notis, g.notificationsFromMetric(m)...)
 					}
 				}
 			}
 
-			if err := updateFn(&gpb.Notification{
-				Timestamp: time.Now().Unix(),
-				Prefix: &gpb.Path{
-					Target: g.cfg.TargetName,
-					Elem: []*gpb.PathElem{
-						{
-							Name: g.cfg.TargetName,
-						},
-					},
-				},
-				Update: updates,
-			}); err != nil {
-				klog.Errorf("failed to send updates %v", err)
+			// Send all notifications.
+			for _, notification := range notis {
+				if err := updateFn(notification); err != nil {
+					klog.Errorf("failed to send notification: %v", err)
+				}
 			}
 		}
-
 	}()
 	return nil
 }
