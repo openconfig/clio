@@ -172,7 +172,6 @@ func TestE2E(t *testing.T) {
 	for _, noti := range gotNoti {
 		notiCnt++
 		for _, update := range noti.GetUpdate() {
-			//
 			notiCnt += int(update.GetDuplicates())
 		}
 	}
