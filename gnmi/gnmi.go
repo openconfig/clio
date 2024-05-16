@@ -93,7 +93,7 @@ func (g *GNMI) Start(_ context.Context, _ component.Host) error {
 
 func (g *GNMI) Stop(_ context.Context) error {
 	close(g.metricCh)
-	g.srv.GracefulStop()
+	g.srv.Stop()
 	return nil
 }
 
@@ -307,6 +307,14 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
 	for i, val := range values {
 		notis = append(notis, &gpb.Notification{
 			Timestamp: timestamps[i].AsTime().Unix(),
+			Prefix: &gpb.Path{
+				Target: g.cfg.TargetName,
+				Elem: []*gpb.PathElem{
+					{
+						Name: g.cfg.TargetName,
+					},
+				},
+			},
 			Update: []*gpb.Update{
 				&gpb.Update{
 					Path: &gpb.Path{
