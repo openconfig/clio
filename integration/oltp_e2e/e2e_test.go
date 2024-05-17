@@ -39,7 +39,7 @@ func newTs() pcommon.Timestamp {
 func configProviderSettings() otelcol.ConfigProviderSettings {
 	return otelcol.ConfigProviderSettings{
 		ResolverSettings: confmap.ResolverSettings{
-			URIs: []string{filepath.Join("config", "config.yaml")},
+			URIs: []string{filepath.Join("./config", "config.yaml")},
 			ProviderFactories: []confmap.ProviderFactory{
 				fileprovider.NewFactory(),
 			},
