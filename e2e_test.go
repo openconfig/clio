@@ -62,7 +62,11 @@ func subscribeRequestForTarget(t *testing.T, target string) *gpb.SubscribeReques
 				},
 				Mode: gpb.SubscriptionList_STREAM,
 				Subscription: []*gpb.Subscription{
-					&gpb.Subscription{Path: &gpb.Path{}},
+					&gpb.Subscription{
+						Mode:              gpb.SubscriptionMode_ON_CHANGE,
+						Path:              &gpb.Path{},
+						SuppressRedundant: false,
+					},
 				},
 			},
 		},
@@ -124,6 +128,7 @@ func TestE2E(t *testing.T) {
 	// Get a gnmi client to subscribe to incoming notifications.
 	gnmiConn, err := grpc.NewClient("localhost:6030", gOpts...)
 	require.NoError(t, err)
+	defer gnmiConn.Close()
 	gnmiClient := gpb.NewGNMIClient(gnmiConn)
 	stream, err := gnmiClient.Subscribe(ctx)
 	require.NoError(t, err)

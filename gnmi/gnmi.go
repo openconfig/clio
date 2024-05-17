@@ -93,7 +93,7 @@ func (g *GNMI) Start(_ context.Context, _ component.Host) error {
 
 func (g *GNMI) Stop(_ context.Context) error {
 	close(g.metricCh)
-	g.srv.Stop()
+	g.srv.GracefulStop()
 	return nil
 }
 
