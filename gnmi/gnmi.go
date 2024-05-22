@@ -307,6 +307,14 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
 	for i, val := range values {
 		notis = append(notis, &gpb.Notification{
 			Timestamp: timestamps[i].AsTime().Unix(),
+			Prefix: &gpb.Path{
+				Target: g.cfg.TargetName,
+				Elem: []*gpb.PathElem{
+					{
+						Name: g.cfg.TargetName,
+					},
+				},
+			},
 			Update: []*gpb.Update{
 				&gpb.Update{
 					Path: &gpb.Path{
