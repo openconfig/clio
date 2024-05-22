@@ -17,9 +17,6 @@ import (
 	"go.opentelemetry.io/collector/otelcol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // configProviderSettings is a convenience function to create ConfigProviderSettings that use the
@@ -73,14 +70,18 @@ func startCollectorPipeline(t *testing.T, ctx context.Context) (*sync.WaitGroup,
 		ConfigProviderSettings: configProviderSettings(),
 	}
 	col, err := otelcol.NewCollector(set)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 
 	// Start collector.
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		require.NoError(t, col.Run(ctx))
+		if err := col.Run(ctx); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}()
 	return wg, col
 }
@@ -92,7 +93,9 @@ func stopCollectorPipeline(t *testing.T, wg *sync.WaitGroup, col *otelcol.Collec
 	col.Shutdown()
 	wg.Wait()
 	t.Log("Stopped collector pipeline")
-	assert.Equal(t, otelcol.StateClosed, col.GetState())
+	if otelcol.StateClosed != col.GetState() {
+		t.Errorf("got collector state %v, want %v", col.GetState(), otelcol.StateClosed)
+	}
 }
 
 // validateNotifications validates that the collector's exported notification stream contain a
@@ -162,17 +165,24 @@ func TestE2E(t *testing.T) {
 	defer stopCollectorPipeline(t, cwg, col)
 
 	// Wait for collector to be started.
-	assert.Eventually(t, func() bool {
-		return col.GetState() == otelcol.StateRunning
-	}, 3*time.Second, 200*time.Millisecond)
+	for i := 15; col.GetState() != otelcol.StateRunning; i-- {
+		if i == 0 {
+			t.Fatalf("Collector never started")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 
 	// Get a gnmi client to subscribe to incoming notifications.
 	gnmiConn, err := grpc.NewClient("localhost:6030", gOpts...)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer gnmiConn.Close()
 	gnmiClient := gpb.NewGNMIClient(gnmiConn)
 	stream, err := gnmiClient.Subscribe(ctx)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 
 	// Setup sink routine for incoming notifications.
 	sinkWg.Add(1)
@@ -183,7 +193,6 @@ func TestE2E(t *testing.T) {
 			if err != nil {
 				return
 			}
-			assert.NoError(t, err)
 
 			if resp.GetUpdate() != nil {
 				gotNoti = append(gotNoti, resp.GetUpdate())
@@ -193,7 +202,9 @@ func TestE2E(t *testing.T) {
 
 	sreq := subscribeRequestForTarget(t, "poodle")
 	err = stream.Send(sreq)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 
 	// Give collector some time to process the notifications.
 	time.Sleep(10 * time.Second)
