@@ -19,9 +19,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -32,19 +29,6 @@ var (
 func newTs() pcommon.Timestamp {
 	metricTimestamp = metricTimestamp.Add(time.Minute)
 	return pcommon.NewTimestampFromTime(metricTimestamp)
-}
-
-// configProviderSettings is a convenience function to create ConfigProviderSettings that use the
-// local config.yaml.
-func configProviderSettings() otelcol.ConfigProviderSettings {
-	return otelcol.ConfigProviderSettings{
-		ResolverSettings: confmap.ResolverSettings{
-			URIs: []string{filepath.Join("config", "config.yaml")},
-			ProviderFactories: []confmap.ProviderFactory{
-				fileprovider.NewFactory(),
-			},
-		},
-	}
 }
 
 // subscribeRequestForTarget is a convenience function to create a target-specific SubscribeRequest.
@@ -79,20 +63,32 @@ func startCollectorPipeline(t *testing.T, ctx context.Context) (*sync.WaitGroup,
 	t.Log("Starting collector pipeline")
 
 	// Create collector.
+	cps := otelcol.ConfigProviderSettings{
+		ResolverSettings: confmap.ResolverSettings{
+			URIs: []string{filepath.Join("config", "config.yaml")},
+			ProviderFactories: []confmap.ProviderFactory{
+				fileprovider.NewFactory(),
+			},
+		},
+	}
 	set := otelcol.CollectorSettings{
 		BuildInfo:              component.NewDefaultBuildInfo(),
 		Factories:              collector.Components,
-		ConfigProviderSettings: configProviderSettings(),
+		ConfigProviderSettings: cps,
 	}
 	col, err := otelcol.NewCollector(set)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 
 	// Start collector.
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		require.NoError(t, col.Run(ctx))
+		if err := col.Run(ctx); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}()
 	return wg, col
 }
@@ -104,7 +100,9 @@ func stopCollectorPipeline(t *testing.T, wg *sync.WaitGroup, col *otelcol.Collec
 	col.Shutdown()
 	wg.Wait()
 	t.Log("Stopped collector pipeline")
-	assert.Equal(t, otelcol.StateClosed, col.GetState())
+	if otelcol.StateClosed != col.GetState() {
+		t.Errorf("got collector state %v, want %v", col.GetState(), otelcol.StateClosed)
+	}
 }
 
 func TestE2E(t *testing.T) {
@@ -127,11 +125,15 @@ func TestE2E(t *testing.T) {
 
 	// Get a gnmi client to subscribe to incoming notifications.
 	gnmiConn, err := grpc.NewClient("localhost:6030", gOpts...)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer gnmiConn.Close()
 	gnmiClient := gpb.NewGNMIClient(gnmiConn)
 	stream, err := gnmiClient.Subscribe(ctx)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 
 	// Setup sink routine for incoming notifications.
 	var gotNoti []*gpb.Notification
@@ -143,7 +145,6 @@ func TestE2E(t *testing.T) {
 			if err != nil {
 				return
 			}
-			assert.NoError(t, err)
 
 			if resp.GetUpdate() != nil {
 				gotNoti = append(gotNoti, resp.GetUpdate())
@@ -153,11 +154,14 @@ func TestE2E(t *testing.T) {
 
 	sreq := subscribeRequestForTarget(t, "poodle")
 	err = stream.Send(sreq)
-	require.NoError(t, err)
-
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 	// Get a gRPC client for exporting metrics.
 	expConn, err := grpc.NewClient("localhost:4317", gOpts...)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer expConn.Close()
 	expClient := pmetricotlp.NewGRPCClient(expConn)
 
@@ -166,7 +170,9 @@ func TestE2E(t *testing.T) {
 		metrics := generateMetrics(t)
 		req := pmetricotlp.NewExportRequestFromMetrics(metrics)
 		_, err = expClient.Export(ctx, req)
-		assert.NoError(t, err)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
 	}
 
 	// Give collector some time to process the notifications.
