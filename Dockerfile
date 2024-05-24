@@ -4,13 +4,13 @@ FROM golang:1.22-alpine AS builder
 RUN mkdir -p /go/src/github.com/clio/magna
 COPY . /go/src/github.com/openconfig/clio
 WORKDIR /go/src/github.com/openconfig/clio
-RUN GOOS=linux go build -C cmd -o clio
+RUN GOOS=linux go build
 
 # Run second stage for the container that we actually run.
 FROM alpine:latest
 RUN mkdir /app
-COPY --from=builder go/src/github.com/openconfig/clio/cmd/ /app
-COPY config/config.yaml /
+COPY --from=builder go/src/github.com/openconfig/clio/clio /app
+COPY config.yaml /
 
 EXPOSE 4317
 EXPOSE 6030
