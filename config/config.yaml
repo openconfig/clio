@@ -3,6 +3,152 @@ receivers:
     protocols:
       grpc:
         endpoint: 0.0.0.0:4317
+  docker_stats:
+    # Note: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/receiver/dockerstatsreceiver/README.md
+    collection_interval: 5s
+    initial_delay: 5s
+    metrics:
+      # State
+      
+      # Uptime
+      container.uptime:
+        enabled: true
+
+      # Number of Restarts
+      container.restarts:
+        enabled: true
+
+      # CPU consumption
+      container.cpu.usage.kernelmode:
+        enabled: true
+      container.cpu.usage.total:
+        enabled: true
+      container.cpu.usage.usermode:
+        enabled: true
+      container.cpu.utilization:
+        enabled: true
+      container.cpu.usage.percpu:
+        enabled: true
+      container.cpu.usage.system:
+        enabled: true
+      container.cpu.throttling_data.periods:
+        enabled: true
+      container.cpu.throttling_data.throttled_periods:
+        enabled: true
+      container.cpu.throttling_data.throttled_time:
+        enabled: true
+
+      # MEM consumption
+      container.memory.file:
+        enabled: true
+      container.memory.percent:
+        enabled: true
+      container.memory.total_cache:
+        enabled: true
+      container.memory.usage.total:
+        enabled: true
+      container.memory.active_anon:
+        enabled: true
+      container.memory.active_file:
+        enabled: true
+      container.memory.anon:
+        enabled: true
+      container.memory.cache:
+        enabled: true
+      container.memory.dirty:
+        enabled: true
+      container.memory.fails:
+        enabled: true
+      container.memory.inactive_anon:
+        enabled: true
+      container.memory.inactive_file:
+        enabled: true
+      container.memory.mapped_file:
+        enabled: true
+      container.memory.pgfault:
+        enabled: true
+      container.memory.pgmajfault:
+        enabled: true
+      container.memory.pgpgin:
+        enabled: true
+      container.memory.pgpgout:
+        enabled: true
+      container.memory.rss:
+        enabled: true
+      container.memory.rss_huge:
+        enabled: true
+      container.memory.total_active_anon:
+        enabled: true
+      container.memory.total_active_file:
+        enabled: true
+      container.memory.total_dirty:
+        enabled: true
+      container.memory.total_inactive_anon:
+        enabled: true
+      container.memory.total_inactive_file:
+        enabled: true
+      container.memory.total_mapped_file:
+        enabled: true
+      container.memory.total_pgfault:
+        enabled: true
+      container.memory.total_pgmajfault:
+        enabled: true
+      container.memory.total_pgpgin:
+        enabled: true
+      container.memory.total_pgpgout:
+        enabled: true
+      container.memory.total_rss:
+        enabled: true
+      container.memory.total_rss_huge:
+        enabled: true
+      container.memory.total_unevictable:
+        enabled: true
+      container.memory.total_writeback:
+        enabled: true
+      container.memory.unevictable:
+        enabled: true
+      container.memory.usage.max:
+        enabled: true
+      container.memory.writeback:
+        enabled: true
+
+      # CPU Limits
+      container.cpu.logical.count:
+        enabled: true
+      container.cpu.limit:
+        enabled: true
+      container.cpu.shares:
+        enabled: true
+
+      # Memory Limits
+      container.memory.usage.limit:
+        enabled: true
+      container.memory.hierarchical_memory_limit:
+        enabled: true
+      container.memory.hierarchical_memsw_limit:
+        enabled: true
+
+      # Process Limits
+      container.pids.limit:
+        enabled: true
+
+      # Network usage. 
+      container.network.io.usage.rx_bytes:
+        enabled: true
+      container.network.io.usage.rx_dropped:
+        enabled: true
+      container.network.io.usage.tx_bytes:
+        enabled: true
+      container.network.io.usage.tx_dropped:
+        enabled: true
+      container.network.io.usage.rx_errors:
+        enabled: true
+      container.network.io.usage.rx_packets:
+        enabled: true
+      container.network.io.usage.tx_errors:
+        enabled: true
+      container.network.io.usage.tx_packets:
+        enabled: true
 
 processors:
   gnmipath:
@@ -14,6 +160,6 @@ exporters:
 service:
   pipelines:
     metrics:
-      receivers: [otlp]
+      receivers: [otlp, docker_stats]
       processors: [gnmipath]
       exporters: [gnmi]
