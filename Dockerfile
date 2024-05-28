@@ -10,7 +10,11 @@ RUN GOOS=linux go build -C cmd -o clio
 FROM alpine:latest
 RUN mkdir /app
 COPY --from=builder go/src/github.com/openconfig/clio/cmd/ /app
-COPY config/config.yaml /
+
+# Copy config file and substitute environment variables (if any).
+RUN apk update && apk add envsubst
+COPY config/config.yaml /config_raw.yaml
+RUN envsubst < /config_raw.yaml > /config.yaml
 
 EXPOSE 4317
 EXPOSE 6030
