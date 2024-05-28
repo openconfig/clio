@@ -156,6 +156,11 @@ processors:
 exporters:
   # NOTE: Prior to v0.86.0 use `logging` instead of `debug`.
   gnmi:
+    # Using bash's Shell Parameter Expansion to provide sensible defaults.
+    addr: ${CLIO_GNMI_ADDR:=":6030"}
+    target: ${CLIO_GNMI_TARGET:="CLIO_GNMI_TARGET"}
+
+
 
 service:
   pipelines:
