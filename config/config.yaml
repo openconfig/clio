@@ -155,8 +155,9 @@ exporters:
   # NOTE: Prior to v0.86.0 use `logging` instead of `debug`.
   gnmi:
     addr: "0.0.0.0:60302"
-    cert_file: /certs/cert.crt
-    key_file: /certs/cert.key
+    # To provide certificates, add the following lines:
+    # cert_file: /certs/cert.crt
+    # key_file: /certs/cert.key
 
 
 
