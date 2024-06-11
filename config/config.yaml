@@ -8,8 +8,6 @@ receivers:
     collection_interval: 5s
     initial_delay: 5s
     metrics:
-      # State
-      
       # Uptime
       container.uptime:
         enabled: true
@@ -156,6 +154,12 @@ processors:
 exporters:
   # NOTE: Prior to v0.86.0 use `logging` instead of `debug`.
   gnmi:
+    addr: "0.0.0.0:60302"
+    # To provide certificates, add the following lines:
+    # cert_file: /certs/cert.crt
+    # key_file: /certs/cert.key
+
+
 
 service:
   pipelines:

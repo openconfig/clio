@@ -11,8 +11,11 @@ FROM alpine:latest
 RUN mkdir /app
 COPY --from=builder go/src/github.com/openconfig/clio/cmd/ /app
 COPY config/config.yaml /
+COPY --from=builder go/src/github.com/openconfig/clio/certs /certs
 
-EXPOSE 4317
-EXPOSE 6030
+# Expose OLTP port
+EXPOSE 4317 
+# Expose gNMI port (defined in config.yaml)
+EXPOSE 60302
 
 CMD ["/app/clio", "--config", "config.yaml"]
