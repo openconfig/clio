@@ -23,6 +23,9 @@ type Config struct {
 	// Addr is  the listen address of the gNMI server.
 	Addr string `mapstructure:"addr"`
 
+	// CaFile is the CA certificate to use for mTLS.
+	CaFile string `mapstructure:"ca_file"`
+
 	// CertFile is the certificate to use for TLS.
 	CertFile string `mapstructure:"cert_file"`
 

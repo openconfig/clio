@@ -71,9 +71,13 @@ func TestHandleMetrics(t *testing.T) {
 				},
 				metricCh: make(chan *pmetric.Metrics, 10),
 			}
-			var n *gpb.Notification
+
+			var cnt int
 			updateFn := func(notif *gpb.Notification) error {
-				n = notif
+				cnt++
+				for _, update := range notif.GetUpdate() {
+					cnt += int(update.GetDuplicates())
+				}
 				return nil
 			}
 
@@ -85,8 +89,8 @@ func TestHandleMetrics(t *testing.T) {
 			close(g.metricCh)
 
 			time.Sleep(time.Second)
-			if len(n.Update) != tc.wantCnt {
-				t.Errorf("missing updates: want %d got %d", tc.wantCnt, len(n.Update))
+			if cnt != tc.wantCnt {
+				t.Errorf("missing updates: want %d got %d", tc.wantCnt, cnt)
 			}
 		})
 	}

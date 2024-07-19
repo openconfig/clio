@@ -32,7 +32,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 	"k8s.io/klog/v2"
 )
@@ -60,14 +59,11 @@ func NewGNMIExporter(logger *zap.Logger, cfg *Config) (*GNMI, error) {
 	}
 
 	var opts []grpc.ServerOption
-
-	if cfg.CertFile != "" {
-		creds, err := credentials.NewServerTLSFromFile(cfg.CertFile, cfg.KeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("cannot create gNMI credentials, %v", err)
-		}
-		opts = append(opts, grpc.Creds(creds))
+	opt, err := gRPCSecurityOption(cfg)
+	if err != nil {
+		return nil, err
 	}
+	opts = append(opts, opt...)
 
 	return &GNMI{
 		cfg:      cfg,
