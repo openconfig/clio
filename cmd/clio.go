@@ -17,9 +17,12 @@ package main
 
 import (
 	"log"
+	"path/filepath"
 
 	"github.com/openconfig/clio/collector"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/confmap/provider/fileprovider"
 	"go.opentelemetry.io/collector/otelcol"
 )
 
@@ -30,7 +33,17 @@ func main() {
 		Version:     "1.0.0",
 	}
 
-	if err := runInteractive(otelcol.CollectorSettings{BuildInfo: info, Factories: collector.Components}); err != nil {
+	settings := otelcol.CollectorSettings{
+		BuildInfo: info,
+		Factories: collector.Components,
+		ConfigProviderSettings: otelcol.ConfigProviderSettings{
+			ResolverSettings: confmap.ResolverSettings{
+				URIs:              []string{filepath.Join("../config", "config.yaml")},
+				ProviderFactories: []confmap.ProviderFactory{fileprovider.NewFactory()},
+			},
+		},
+	}
+	if err := runInteractive(settings); err != nil {
 		log.Fatal(err)
 	}
 }
