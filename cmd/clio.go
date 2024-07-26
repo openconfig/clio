@@ -40,6 +40,7 @@ func main() {
 			ResolverSettings: confmap.ResolverSettings{
 				URIs:              []string{filepath.Join("../config", "config.yaml")},
 				ProviderFactories: []confmap.ProviderFactory{fileprovider.NewFactory()},
+				DefaultScheme:     "file",
 			},
 		},
 	}
