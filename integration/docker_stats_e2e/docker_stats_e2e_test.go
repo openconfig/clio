@@ -47,7 +47,7 @@ func subscribeRequestForTarget(t *testing.T, target string) *gpb.SubscribeReques
 				},
 				Mode: gpb.SubscriptionList_STREAM,
 				Subscription: []*gpb.Subscription{
-					&gpb.Subscription{
+					{
 						Mode:              gpb.SubscriptionMode_ON_CHANGE,
 						Path:              &gpb.Path{},
 						SuppressRedundant: false,
@@ -80,7 +80,7 @@ func startCollectorPipeline(t *testing.T, ctx context.Context) (*sync.WaitGroup,
 	go func() {
 		defer wg.Done()
 		if err := col.Run(ctx); err != nil {
-			t.Fatalf("%v", err)
+			t.Errorf("%v", err)
 		}
 	}()
 	return wg, col
@@ -134,9 +134,7 @@ func validateNotifications(t *testing.T, gotNoti []*gpb.Notification) {
 	for _, n := range gotNoti {
 		for _, u := range n.GetUpdate() {
 			path := elems2path(u.GetPath().GetElem())
-			if _, ok := wantPathSet[path]; ok {
-				delete(wantPathSet, path)
-			}
+			delete(wantPathSet, path)
 		}
 	}
 
