@@ -71,9 +71,10 @@ func TestHandleMetrics(t *testing.T) {
 				},
 				metricCh: make(chan *pmetric.Metrics, 10),
 			}
-			var n *gpb.Notification
+
+			n := &gpb.Notification{}
 			updateFn := func(notif *gpb.Notification) error {
-				n = notif
+				n.Update = append(n.Update, notif.Update...)
 				return nil
 			}
 
