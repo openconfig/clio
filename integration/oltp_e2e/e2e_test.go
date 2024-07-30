@@ -87,7 +87,7 @@ func startCollectorPipeline(t *testing.T, ctx context.Context) (*sync.WaitGroup,
 	go func() {
 		defer wg.Done()
 		if err := col.Run(ctx); err != nil {
-			t.Fatalf("%v", err)
+			t.Errorf("%v", err)
 		}
 	}()
 	return wg, col
