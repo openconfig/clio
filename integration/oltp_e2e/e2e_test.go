@@ -46,7 +46,7 @@ func subscribeRequestForTarget(t *testing.T, target string) *gpb.SubscribeReques
 				},
 				Mode: gpb.SubscriptionList_STREAM,
 				Subscription: []*gpb.Subscription{
-					&gpb.Subscription{
+					{
 						Mode:              gpb.SubscriptionMode_ON_CHANGE,
 						Path:              &gpb.Path{},
 						SuppressRedundant: false,
