@@ -13,3 +13,4 @@ jobs:
     with:
       tests-excludes-regex: integration
       race-tests-excludes-regex: integration
+      coverage-excludes-regex: integration
