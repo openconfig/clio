@@ -312,7 +312,7 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
 				},
 			},
 			Update: []*gpb.Update{
-				&gpb.Update{
+				{
 					Path: &gpb.Path{
 						Elem: g.toPathElems(p.Name()),
 					},
