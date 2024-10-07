@@ -23,11 +23,20 @@ type Config struct {
 	// Addr is  the listen address of the gNMI server.
 	Addr string `mapstructure:"addr"`
 
+	// TpSec is the transport security used by the gNMI server, i.e., "insecure", "tls", or "mtls".
+	TpSec string `mapstructure:"tp_sec"`
+
+	// CAFile is the CA certificate to use for mTLS.
+	CAFile string `mapstructure:"ca_file"`
+
 	// CertFile is the certificate to use for TLS.
 	CertFile string `mapstructure:"cert_file"`
 
 	// KeyFile is the key to use for TLS.
 	KeyFile string `mapstructure:"key_file"`
+
+	// CredsRefresh is the duration to refresh the credentials.
+	CredsRefresh string `mapstructure:"creds_refresh"`
 
 	// TargetName is the target name of this gNMI server.
 	TargetName string `mapstructure:"target_name"`
