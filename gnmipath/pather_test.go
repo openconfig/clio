@@ -101,19 +101,5 @@ func metricName(t *testing.T, ms pmetric.Metrics) string {
 	t.Helper()
 
 	rms := ms.ResourceMetrics()
-	for i := 0; i < rms.Len(); i++ {
-		rm := rms.At(i)
-		ilms := rm.ScopeMetrics()
-		for j := 0; j < ilms.Len(); j++ {
-			ilm := ilms.At(j)
-			ms := ilm.Metrics()
-			for k := 0; k < ms.Len(); k++ {
-				m := ms.At(k)
-				return m.Name()
-			}
-		}
-	}
-
-	t.Error("metric has no name")
-	return ""
+	return rms.At(0).ScopeMetrics().At(0).Metrics().At(0).Name()
 }

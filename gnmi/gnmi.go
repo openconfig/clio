@@ -24,7 +24,6 @@ import (
 	ompb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	anypb "google.golang.org/protobuf/types/known/anypb"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/openconfig/magna/lwotgtelem"
 	"github.com/openconfig/magna/lwotgtelem/gnmit"
 	"go.opentelemetry.io/collector/component"
@@ -34,6 +33,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/klog/v2"
 )
 
@@ -54,7 +54,7 @@ func NewGNMIExporter(logger *zap.Logger, cfg *Config) (*GNMI, error) {
 		return nil, err
 	}
 
-	gnmiLis, err := net.Listen("tcp", fmt.Sprintf("%s", cfg.Addr))
+	gnmiLis, err := net.Listen("tcp", cfg.Addr)
 	if err != nil {
 		klog.Exitf("cannot listen on %s, err: %v", cfg.Addr, err)
 	}
