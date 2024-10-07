@@ -1641,6 +1641,7 @@ github.com/klauspost/compress v1.15.9/go.mod h1:PhcZ0MbTNciWF3rruxRgKxI5NkcHHrHU
 github.com/klauspost/compress v1.16.7/go.mod h1:ntbaceVETuRiXiv4DpjP66DpAtAGkEQskQzEyD//IeE=
 github.com/klauspost/compress v1.17.8 h1:YcnTYrq7MikUT7k0Yb5eceMmALQPYBW/Xltxn0NAMnU=
 github.com/klauspost/compress v1.17.8/go.mod h1:Di0epgTjJY877eYKx5yC51cX2A2Vl2ibi7bDH9ttBbw=
+github.com/klauspost/compress v1.17.9 h1:6KIumPrER1LHsvBVuDa0r5xaG0Es51mhhB9BQB2qeMA=
 github.com/klauspost/compress v1.17.9/go.mod h1:Di0epgTjJY877eYKx5yC51cX2A2Vl2ibi7bDH9ttBbw=
 github.com/klauspost/cpuid/v2 v2.0.9/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=
 github.com/klauspost/cpuid/v2 v2.2.3/go.mod h1:RVVoqg1df56z8g3pUjL/3lE5UfnlrJX8tyFgg4nqhuY=
@@ -1891,7 +1892,9 @@ go.opentelemetry.io/collector/confmap/provider/fileprovider v0.100.0 h1:H2YtC6mO
 go.opentelemetry.io/collector/confmap/provider/fileprovider v0.100.0/go.mod h1:JEYr74rqYYsgKc5bDtsqy8TFHmmhHnEc0Hm5ekZSj/8=
 go.opentelemetry.io/collector/confmap/provider/fileprovider v0.105.0 h1:RgQwEbJgx+BihDt8yhiqmEi8IjQYFwbzsYRcTzvM7E4=
 go.opentelemetry.io/collector/confmap/provider/fileprovider v0.105.0/go.mod h1:P7oT+6eaMv+ZyPSu6SEKalfR/UALdQgE3hq36b0Iww4=
+go.opentelemetry.io/collector/confmap/provider/httpprovider v0.100.0 h1:GPFfS9BmuF0bzeW/lUElvI2NzHjAKq5U1E/lXLy/7pc=
 go.opentelemetry.io/collector/confmap/provider/httpprovider v0.100.0/go.mod h1:s8YCUcFOOnY4NKeQjVTup6XiA3Oj3yqs8NB10kbwuAU=
+go.opentelemetry.io/collector/confmap/provider/httpsprovider v0.100.0 h1:vcOsDXQRdf/TUcD0vYTGkzvaPmoplG8Fkv8IoJ5cB58=
 go.opentelemetry.io/collector/confmap/provider/httpsprovider v0.100.0/go.mod h1:GQ7LqkJKOcUFm8nxdV0P7eHPjLzVtNoBgqnwBGL4RCc=
 go.opentelemetry.io/collector/confmap/provider/yamlprovider v0.100.0 h1:a7qqKfczlB8wGQNeiGiSMiwCYRwTVdlIIUG98Jn5ydY=
 go.opentelemetry.io/collector/confmap/provider/yamlprovider v0.100.0/go.mod h1:IlcEhPYl3JDbl+5Bd9kWeDACHnvctdEnA7zlZCdtWk8=
