@@ -34,7 +34,7 @@ type Config struct {
 
 	// KeyFile is the key to use for TLS.
 	KeyFile string `mapstructure:"key_file"`
-	
+
 	// CredsRefresh is the duration to refresh the credentials.
 	CredsRefresh string `mapstructure:"creds_refresh"`
 

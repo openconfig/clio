@@ -25,6 +25,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.2.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.64.1
+	google.golang.org/grpc/security/advancedtls v1.0.0
 	google.golang.org/protobuf v1.34.1
 	k8s.io/klog/v2 v2.120.1
 )
@@ -142,6 +143,5 @@ require (
 	gonum.org/v1/gonum v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240520151616-dc85e6b867a5 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240604185151-ef581f913117 // indirect
-	google.golang.org/grpc/security/advancedtls v1.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
