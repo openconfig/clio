@@ -34,19 +34,31 @@ func gRPCSecurityOption(cfg *Config) ([]grpc.ServerOption, error) {
 	var opts []grpc.ServerOption
 	var err error
 
-	switch {
-	case cfg.CaFile != "":
-		opts, err = optionMutualTLS(cfg)
-	case cfg.CaFile == "" && cfg.CertFile != "":
+	switch cfg.TpSec {
+	case "", "insecure": // No security option requested.
+	case "tls":
 		opts, err = optionTLS(cfg)
+	case "mtls":
+		opts, err = optionMutualTLS(cfg)
+	default:
+		return nil, fmt.Errorf("unsupported transport security: %q; must be one of: insecure, tls, mtls", cfg.TpSec)
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gNMI credentials: %v", err)
 	}
+
 	return opts, nil
 }
 
 func optionTLS(cfg *Config) ([]grpc.ServerOption, error) {
+	// Check that all needed files actually exist.
+	for _, f := range []string{cfg.CertFile, cfg.KeyFile} {
+		if _, err := os.Stat(f); f == "" || errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("file %q does not exist", f)
+		}
+	}
+
 	creds, err := credentials.NewServerTLSFromFile(cfg.CertFile, cfg.KeyFile)
 	if err != nil {
 		return nil, err
@@ -57,8 +69,8 @@ func optionTLS(cfg *Config) ([]grpc.ServerOption, error) {
 func optionMutualTLS(cfg *Config) ([]grpc.ServerOption, error) {
 
 	// Check that all needed files actually exist.
-	for _, f := range []string{cfg.CertFile, cfg.KeyFile, cfg.CaFile} {
-		if _, err := os.Stat(f); errors.Is(err, os.ErrNotExist) {
+	for _, f := range []string{cfg.CertFile, cfg.KeyFile, cfg.CAFile} {
+		if _, err := os.Stat(f); f == "" || errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("file %q does not exist", f)
 		}
 	}
@@ -77,7 +89,7 @@ func optionMutualTLS(cfg *Config) ([]grpc.ServerOption, error) {
 
 	// Get a provider for the root credentials.
 	root := pemfile.Options{
-		RootFile:        cfg.CaFile,
+		RootFile:        cfg.CAFile,
 		RefreshDuration: credsRefreshDuration,
 	}
 	rootProvider, err := pemfile.NewProvider(root)

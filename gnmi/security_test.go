@@ -37,6 +37,7 @@ func TestGRPCSecurityOption(t *testing.T) {
 		{
 			name: "tls",
 			cfg: &Config{
+				TpSec:    "tls",
 				CertFile: certFile,
 				KeyFile:  keyFile,
 			},
@@ -45,7 +46,8 @@ func TestGRPCSecurityOption(t *testing.T) {
 		{
 			name: "mtls",
 			cfg: &Config{
-				CaFile:   caFile,
+				TpSec:    "mtls",
+				CAFile:   caFile,
 				CertFile: certFile,
 				KeyFile:  keyFile,
 			},
@@ -75,6 +77,7 @@ func TestGRPCSecurityOptionErrors(t *testing.T) {
 		{
 			name: "tls-nonexist-cert",
 			cfg: &Config{
+				TpSec:    "tls",
 				CertFile: "testdata/capybara-stole-this-cert.pem",
 				KeyFile:  keyFile,
 			},
@@ -83,6 +86,7 @@ func TestGRPCSecurityOptionErrors(t *testing.T) {
 		{
 			name: "tls-nonexist-key",
 			cfg: &Config{
+				TpSec:    "tls",
 				CertFile: certFile,
 				KeyFile:  "testdata/capybara-stole-this-key.pem",
 			},
@@ -91,7 +95,8 @@ func TestGRPCSecurityOptionErrors(t *testing.T) {
 		{
 			name: "mtls-nonexist-ca-cert",
 			cfg: &Config{
-				CaFile:   "testdata/capybara-stole-this-ca-cert.crt",
+				TpSec:    "mtls",
+				CAFile:   "testdata/capybara-stole-this-ca-cert.crt",
 				CertFile: certFile,
 				KeyFile:  keyFile,
 			},
@@ -100,8 +105,9 @@ func TestGRPCSecurityOptionErrors(t *testing.T) {
 		{
 			name: "mtls-nonexist-cli-cert",
 			cfg: &Config{
-				CaFile:   caFile,
-				CertFile: "testdata/capybara-stole-this-cert.pem",
+				TpSec:    "mtls",
+				CAFile:   caFile,
+				CertFile: "",
 				KeyFile:  keyFile,
 			},
 			errMsg: "for nonexistent client certificate",
@@ -109,7 +115,8 @@ func TestGRPCSecurityOptionErrors(t *testing.T) {
 		{
 			name: "mtls-nonexist-key",
 			cfg: &Config{
-				CaFile:   caFile,
+				TpSec:    "mtls",
+				CAFile:   caFile,
 				CertFile: certFile,
 				KeyFile:  "testdata/capybara-stole-this-key.pem",
 			},
