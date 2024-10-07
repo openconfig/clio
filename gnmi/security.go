@@ -27,9 +27,19 @@ import (
 )
 
 const (
-	credsRefreshDuration = 24 * time.Hour
+	// defaultCredsRefreshDuration is the default refresh duration for the credentials.
+	defaultCredsRefreshDuration = time.Hour
 )
 
+func credsRefreshDuration(cfg *Config) (time.Duration, error) {
+	if cfg.CredsRefresh == "" {
+		return defaultCredsRefreshDuration, nil
+	}
+	return time.ParseDuration(cfg.CredsRefresh)
+}
+
+// gRPCSecurityOption returns a gRPC server option based on the transport security
+// configuration.
 func gRPCSecurityOption(cfg *Config) ([]grpc.ServerOption, error) {
 	var opts []grpc.ServerOption
 	var err error
@@ -75,11 +85,17 @@ func optionMutualTLS(cfg *Config) ([]grpc.ServerOption, error) {
 		}
 	}
 
+	// Determine the refresh duration.
+	crd, err := credsRefreshDuration(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	// Get a provider for the identity credentials.
 	identity := pemfile.Options{
 		CertFile:        cfg.CertFile,
 		KeyFile:         cfg.KeyFile,
-		RefreshDuration: credsRefreshDuration,
+		RefreshDuration: crd,
 	}
 
 	identityProvider, err := pemfile.NewProvider(identity)
@@ -90,7 +106,7 @@ func optionMutualTLS(cfg *Config) ([]grpc.ServerOption, error) {
 	// Get a provider for the root credentials.
 	root := pemfile.Options{
 		RootFile:        cfg.CAFile,
-		RefreshDuration: credsRefreshDuration,
+		RefreshDuration: crd,
 	}
 	rootProvider, err := pemfile.NewProvider(root)
 	if err != nil {

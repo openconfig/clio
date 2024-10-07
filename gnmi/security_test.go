@@ -122,6 +122,17 @@ func TestGRPCSecurityOptionErrors(t *testing.T) {
 			},
 			errMsg: "for nonexistent client private key",
 		},
+		{
+			name: "mtls-refresh-duration-error",
+			cfg: &Config{
+				TpSec:        "mtls",
+				CAFile:       caFile,
+				CertFile:     certFile,
+				KeyFile:      keyFile,
+				CredsRefresh: "1095.75fortnights",
+			},
+			errMsg: "unknown unit \"fortnights\" in duration \"1095.75fortnights\"",
+		},
 	}
 
 	for _, tc := range tests {
