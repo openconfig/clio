@@ -30,12 +30,36 @@ func TestHandleMetrics(t *testing.T) {
 		name         string
 		inCnt        int
 		InMetricType pmetric.MetricType
+		inTarget     string
+		inOrigin     string
 		wantCnt      int
 	}{
 		{
 			name:         "gauge-10",
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeGauge,
+			wantCnt:      20,
+		},
+		{
+			name:         "gauge-10-with-target",
+			inCnt:        10,
+			InMetricType: pmetric.MetricTypeGauge,
+			inTarget:     "moo-deng",
+			wantCnt:      20,
+		},
+		{
+			name:         "gauge-10-with-origin",
+			inCnt:        10,
+			InMetricType: pmetric.MetricTypeGauge,
+			inOrigin:     "capybara",
+			wantCnt:      20,
+		},
+		{
+			name:         "gauge-10-with-target-and-origin",
+			inCnt:        10,
+			InMetricType: pmetric.MetricTypeGauge,
+			inTarget:     "seals-on-ice-floe",
+			inOrigin:     "orca-gang",
 			wantCnt:      20,
 		},
 		{
@@ -67,8 +91,9 @@ func TestHandleMetrics(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			g := &GNMI{
 				cfg: &Config{
-					TargetName: "target",
+					TargetName: tc.inTarget,
 					Sep:        "/",
+					Origin:     tc.inOrigin,
 				},
 				metricCh: make(chan *pmetric.Metrics, 10),
 			}
@@ -94,6 +119,14 @@ func TestHandleMetrics(t *testing.T) {
 			defer nMu.Unlock()
 			if len(n.Update) != tc.wantCnt {
 				t.Errorf("missing updates: want %d got %d", tc.wantCnt, len(n.Update))
+			}
+			for _, u := range n.Update {
+				if u.Path.Origin != tc.inOrigin {
+					t.Errorf("origin mismatch: want %s got %s", tc.inOrigin, u.Path.Origin)
+				}
+				if u.Path.Target != tc.inTarget {
+					t.Errorf("target mismatch: want %s got %s", tc.inTarget, u.Path.Target)
+				}
 			}
 		})
 	}

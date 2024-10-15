@@ -46,6 +46,9 @@ type Config struct {
 
 	// Sep is the separator used in the metric name.
 	Sep string `mapstructure:"sep"`
+
+	// Origin is set as the origin of gNMI notifications.
+	Origin string `mapstructure:"origin"`
 }
 
 var _ component.Config = (*Config)(nil)
