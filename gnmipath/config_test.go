@@ -20,7 +20,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/confmap/confmaptest"
 )
@@ -28,7 +27,7 @@ import (
 func TestUnmarshalDefaultConfig(t *testing.T) {
 	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig()
-	if err := component.UnmarshalConfig(confmap.New(), cfg); err != nil {
+	if err := confmap.New().Unmarshal(cfg); err != nil {
 		t.Errorf("UnmarshalConfig returned error: %v", err)
 	}
 
@@ -42,7 +41,7 @@ func TestUnmarshalConfig(t *testing.T) {
 	require.NoError(t, err)
 	factory := NewFactory()
 	got := factory.CreateDefaultConfig()
-	if err := component.UnmarshalConfig(cm, got); err != nil {
+	if err := cm.Unmarshal(got); err != nil {
 		t.Errorf("UnmarshalConfig returned error: %v", err)
 	}
 

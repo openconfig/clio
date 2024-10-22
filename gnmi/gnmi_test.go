@@ -16,6 +16,7 @@ package gnmi
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -71,9 +72,13 @@ func TestHandleMetrics(t *testing.T) {
 				},
 				metricCh: make(chan *pmetric.Metrics, 10),
 			}
-			var n *gpb.Notification
+
+			n := &gpb.Notification{}
+			var nMu sync.Mutex
 			updateFn := func(notif *gpb.Notification) error {
-				n = notif
+				nMu.Lock()
+				defer nMu.Unlock()
+				n.Update = append(n.Update, notif.Update...)
 				return nil
 			}
 
@@ -85,6 +90,8 @@ func TestHandleMetrics(t *testing.T) {
 			close(g.metricCh)
 
 			time.Sleep(time.Second)
+			nMu.Lock()
+			defer nMu.Unlock()
 			if len(n.Update) != tc.wantCnt {
 				t.Errorf("missing updates: want %d got %d", tc.wantCnt, len(n.Update))
 			}
