@@ -15,7 +15,14 @@
 package gnmi
 
 import (
+	"context"
 	"testing"
+
+	gpb "github.com/openconfig/gnmi/proto/gnmi"
+
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/alts"
 )
 
 var (
@@ -150,5 +157,43 @@ func TestGRPCSecurityOptionErrors(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+// TestALTSConnection tests that we can connect to a gNMI server using ALTS.
+func TestALTSConnection(t *testing.T) {
+	// Set up ALTS config & logger.
+	cfg := &Config{
+		TpSec: "alts",
+	}
+	logger, err := zap.NewProduction()
+	if err != nil {
+		t.Errorf("failed to create logger: %v", err)
+	}
+	defer logger.Sync()
+
+	// Start the exporter.
+	exporter, err := NewGNMIExporter(logger, cfg)
+	if err != nil {
+		t.Errorf("NewGNMIExporter returned error: %v", err)
+	}
+	if err := exporter.Start(nil, nil); err != nil {
+		t.Errorf("Start returned error: %v", err)
+	}
+	defer exporter.Stop(nil)
+
+	// Connect to the exporter.
+	addr := exporter.lis.Addr()
+	altsTC := alts.NewClientCreds(alts.DefaultClientOptions())
+	conn, err := grpc.NewClient(addr.String(), grpc.WithTransportCredentials(altsTC))
+	if err != nil {
+		t.Errorf("failed to connect to gNMI server: %v", err)
+	}
+	defer conn.Close()
+
+	// Subscribe to the exporter and see whether we get an error.
+	gnmiClient := gpb.NewGNMIClient(conn)
+	if _, err = gnmiClient.Subscribe(context.Background()); err != nil {
+		t.Fatalf("%v", err)
 	}
 }
