@@ -17,7 +17,7 @@ package gnmi
 import (
 	"context"
 	"errors"
-	//"strings"
+	"strings"
 	"testing"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
@@ -197,8 +197,7 @@ func TestALTSConnection(t *testing.T) {
 	gnmiClient := gpb.NewGNMIClient(conn)
 	if _, err = gnmiClient.Subscribe(context.Background()); err != nil {
 		// If we are not running on a GCE platform, ALTS does not work.
-		if errors.Is(err, alts.ErrUntrustedPlatform) {
-			// if strings.HasSuffix(err.Error(), alts.ErrUntrustedPlatform.Error()) {
+		if strings.HasSuffix(err.Error(), alts.ErrUntrustedPlatform.Error()) {
 			return
 		}
 		t.Fatalf("%v", err)
