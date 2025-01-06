@@ -75,7 +75,11 @@ func NewGNMIExporter(logger *zap.Logger, cfg *Config) (*GNMI, error) {
 }
 
 func (g *GNMI) Start(_ context.Context, _ component.Host) error {
-	g.logger.Info("starting")
+	g.logger.Info("starting gNMI exporter", zap.String("addr", g.cfg.Addr),
+		zap.String("target", g.cfg.TargetName), zap.String("origin", g.cfg.Origin),
+		zap.String("sep", g.cfg.Sep), zap.Int("buffer_size", g.cfg.BufferSize),
+		zap.String("transport_security", g.cfg.TpSec),
+	)
 	reflection.Register(g.srv)
 	gpb.RegisterGNMIServer(g.srv, g.telemSrv.GNMIServer)
 	go g.srv.Serve(g.lis)
@@ -292,6 +296,7 @@ func (g *GNMI) typedValuesAndTimesFromMetric(m pmetric.Metric) ([]*gpb.TypedValu
 	return tvals, tstamps
 }
 
+// notificationsFromMetric returns a list of gNMI notifications based on a metric.
 func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
 	var notis []*gpb.Notification
 	values, timestamps := g.typedValuesAndTimesFromMetric(p)
@@ -303,6 +308,7 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
 		notis = append(notis, &gpb.Notification{
 			Timestamp: timestamps[i].AsTime().Unix(),
 			Prefix: &gpb.Path{
+				Origin: g.cfg.Origin,
 				Target: g.cfg.TargetName,
 				Elem: []*gpb.PathElem{
 					{
@@ -313,7 +319,9 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
 			Update: []*gpb.Update{
 				{
 					Path: &gpb.Path{
-						Elem: g.toPathElems(p.Name()),
+						Target: g.cfg.TargetName,
+						Origin: g.cfg.Origin,
+						Elem:   g.toPathElems(p.Name()),
 					},
 					Val: val,
 				},
@@ -324,9 +332,8 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
 }
 
 // handleMetrics iterates over all received metrics and converts them into a
-// gNMI update. This set of updates are then packed into a gNMI notfication
+// gNMI update. This set of updates are then packed into a gNMI notification
 // and sent to the telemetry server.
-// Note: this currently supports only SUM metrics.
 func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target string, cleanup func()) error {
 	go func() {
 		for ms := range g.metricCh {
