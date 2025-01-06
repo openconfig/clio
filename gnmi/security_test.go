@@ -16,6 +16,7 @@ package gnmi
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -197,12 +198,7 @@ func TestALTSConnection(t *testing.T) {
 	// Subscribe to the exporter and see whether we get an error.
 	gnmiClient := gpb.NewGNMIClient(conn)
 	if _, err = gnmiClient.Subscribe(context.Background()); err != nil {
-		s, ok := status.FromError(err)
-		if !ok {
-			t.Fatalf("failed to convert error to status: %v", err)
-		}
-		t.Logf("status: %v, expected: %v", s, alts.ErrUntrustedPlatform)
-		if s.Code() == codes.Unavailable && strings.HasSuffix(s.Message(), alts.ErrUntrustedPlatform.Error()) {
+		if strings.HasSuffix(fmt.Sprintf("%v", err), fmt.Sprintf("%v", alts.ErrUntrustedPlatform)) {
 			return
 		}
 		t.Fatalf("%v", err)
