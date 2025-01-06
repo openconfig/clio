@@ -24,9 +24,7 @@ import (
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/alts"
-	"google.golang.org/grpc/status"
 )
 
 var (
