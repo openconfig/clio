@@ -23,7 +23,9 @@ import (
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/alts"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -195,8 +197,12 @@ func TestALTSConnection(t *testing.T) {
 	// Subscribe to the exporter and see whether we get an error.
 	gnmiClient := gpb.NewGNMIClient(conn)
 	if _, err = gnmiClient.Subscribe(context.Background()); err != nil {
-		// If we are not running on a GCE platform, ALTS does not work.
-		if strings.HasSuffix(err.Error(), alts.ErrUntrustedPlatform.Error()) {
+		s, ok := status.FromError(err)
+		if !ok {
+			t.Fatalf("failed to convert error to status: %v", err)
+		}
+		t.Logf("status: %v, expected: %v", s, alts.ErrUntrustedPlatform)
+		if s.Code() == codes.Unavailable && strings.HasSuffix(s.Message(), alts.ErrUntrustedPlatform.Error()) {
 			return
 		}
 		t.Fatalf("%v", err)
