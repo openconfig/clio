@@ -196,7 +196,7 @@ func TestALTSConnection(t *testing.T) {
 	// Subscribe to the exporter and see whether we get an error.
 	gnmiClient := gpb.NewGNMIClient(conn)
 	if _, err = gnmiClient.Subscribe(context.Background()); err != nil {
-		if strings.HasSuffix(fmt.Sprintf("%v", err), fmt.Sprintf("%v", alts.ErrUntrustedPlatform)) {
+		if strings.Contains(err.Error(), alts.ErrUntrustedPlatform.Error()) {
 			return
 		}
 		t.Fatalf("%v", err)
