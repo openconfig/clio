@@ -53,6 +53,13 @@ func TestGRPCSecurityOption(t *testing.T) {
 			},
 			wantCnt: 1,
 		},
+		{
+			name: "alts",
+			cfg: &Config{
+				TpSec: "alts",
+			},
+			wantCnt: 1,
+		},
 	}
 
 	for _, tc := range tests {
