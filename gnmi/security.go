@@ -54,7 +54,7 @@ func gRPCSecurityOption(cfg *Config) ([]grpc.ServerOption, error) {
 	case "alts":
 		opts, err = optionALTS(cfg)
 	default:
-		return nil, fmt.Errorf("unsupported transport security: %q; must be one of: insecure, tls, mtls", cfg.TpSec)
+		return nil, fmt.Errorf("unsupported transport security: %q; must be one of: insecure, alts,tls, mtls", cfg.TpSec)
 	}
 
 	if err != nil {
