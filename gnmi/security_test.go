@@ -177,10 +177,10 @@ func TestALTSConnection(t *testing.T) {
 	if err != nil {
 		t.Errorf("NewGNMIExporter returned error: %v", err)
 	}
-	if err := exporter.Start(nil, nil); err != nil {
+	if err := exporter.Start(context.Background(), nil); err != nil {
 		t.Errorf("Start returned error: %v", err)
 	}
-	defer exporter.Stop(nil)
+	defer exporter.Stop(context.Background())
 
 	// Connect to the exporter.
 	addr := exporter.lis.Addr()
