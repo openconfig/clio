@@ -333,7 +333,6 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
 // handleMetrics iterates over all received metrics and converts them into a
 // gNMI update. This set of updates are then packed into a gNMI notification
 // and sent to the telemetry server.
-// Note: this currently supports only SUM metrics.
 func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target string, cleanup func()) error {
 	go func() {
 		for ms := range g.metricCh {
