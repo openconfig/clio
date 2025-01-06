@@ -296,6 +296,7 @@ func (g *GNMI) typedValuesAndTimesFromMetric(m pmetric.Metric) ([]*gpb.TypedValu
 	return tvals, tstamps
 }
 
+// notificationsFromMetric returns a list of gNMI notifications based on a metric.
 func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
 	var notis []*gpb.Notification
 	values, timestamps := g.typedValuesAndTimesFromMetric(p)
