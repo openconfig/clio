@@ -16,7 +16,6 @@ package gnmi
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 
