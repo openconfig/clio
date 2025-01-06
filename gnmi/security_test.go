@@ -195,6 +195,9 @@ func TestALTSConnection(t *testing.T) {
 	// Subscribe to the exporter and see whether we get an error.
 	gnmiClient := gpb.NewGNMIClient(conn)
 	if _, err = gnmiClient.Subscribe(context.Background()); err != nil {
+		// ALTS is only supported on GCE-based platforms. If we are running on a
+		// non-GCE platform, we expect to get an error complaining about the
+		// untrusted platform.
 		if strings.Contains(err.Error(), alts.ErrUntrustedPlatform.Error()) {
 			return
 		}
