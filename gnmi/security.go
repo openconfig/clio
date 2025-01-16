@@ -22,6 +22,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
 	"google.golang.org/grpc/security/advancedtls"
 )
@@ -50,8 +51,10 @@ func gRPCSecurityOption(cfg *Config) ([]grpc.ServerOption, error) {
 		opts, err = optionTLS(cfg)
 	case "mtls":
 		opts, err = optionMutualTLS(cfg)
+	case "alts":
+		opts, err = optionALTS(cfg)
 	default:
-		return nil, fmt.Errorf("unsupported transport security: %q; must be one of: insecure, tls, mtls", cfg.TpSec)
+		return nil, fmt.Errorf("unsupported transport security: %q; must be one of: insecure, alts,tls, mtls", cfg.TpSec)
 	}
 
 	if err != nil {
@@ -59,6 +62,11 @@ func gRPCSecurityOption(cfg *Config) ([]grpc.ServerOption, error) {
 	}
 
 	return opts, nil
+}
+
+func optionALTS(cfg *Config) ([]grpc.ServerOption, error) {
+	creds := alts.NewServerCreds(alts.DefaultServerOptions())
+	return []grpc.ServerOption{grpc.Creds(creds)}, nil
 }
 
 func optionTLS(cfg *Config) ([]grpc.ServerOption, error) {
@@ -77,7 +85,6 @@ func optionTLS(cfg *Config) ([]grpc.ServerOption, error) {
 }
 
 func optionMutualTLS(cfg *Config) ([]grpc.ServerOption, error) {
-
 	// Check that all needed files actually exist.
 	for _, f := range []string{cfg.CertFile, cfg.KeyFile, cfg.CAFile} {
 		if _, err := os.Stat(f); f == "" || errors.Is(err, os.ErrNotExist) {
