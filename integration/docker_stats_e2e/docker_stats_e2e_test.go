@@ -19,6 +19,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+const (
+	testTarget = "poodle"
+	testOrigin = "shiba"
+)
+
 // configProviderSettings is a convenience function to create ConfigProviderSettings that use the
 // local config.yaml.
 func configProviderSettings() otelcol.ConfigProviderSettings {
@@ -39,11 +44,7 @@ func subscribeRequestForTarget(t *testing.T, target string) *gpb.SubscribeReques
 			Subscribe: &gpb.SubscriptionList{
 				Prefix: &gpb.Path{
 					Target: target,
-					Elem: []*gpb.PathElem{
-						{
-							Name: target,
-						},
-					},
+					Origin: testOrigin,
 				},
 				Mode: gpb.SubscriptionList_STREAM,
 				Subscription: []*gpb.Subscription{
@@ -59,7 +60,7 @@ func subscribeRequestForTarget(t *testing.T, target string) *gpb.SubscribeReques
 }
 
 // startCollectorPipeline starts and returns the collector pipeline (plus the WaitGroup it runs in).
-func startCollectorPipeline(t *testing.T, ctx context.Context) (*sync.WaitGroup, *otelcol.Collector) {
+func startCollectorPipeline(ctx context.Context, t *testing.T) (*sync.WaitGroup, *otelcol.Collector) {
 	t.Helper()
 	t.Log("Starting collector pipeline")
 
@@ -159,7 +160,7 @@ func TestE2E(t *testing.T) {
 	defer sinkWg.Wait()
 
 	// Start collector pipeline & schedule stop.
-	cwg, col := startCollectorPipeline(t, ctx)
+	cwg, col := startCollectorPipeline(ctx, t)
 	defer stopCollectorPipeline(t, cwg, col)
 
 	// Wait for collector to be started.
@@ -198,14 +199,14 @@ func TestE2E(t *testing.T) {
 		}
 	}()
 
-	sreq := subscribeRequestForTarget(t, "poodle")
+	sreq := subscribeRequestForTarget(t, testTarget)
 	err = stream.Send(sreq)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 
 	// Give collector some time to process the notifications.
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	validateNotifications(t, gotNoti)
 }

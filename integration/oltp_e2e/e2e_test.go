@@ -40,7 +40,7 @@ func subscribeRequestForTarget(t *testing.T, target string) *gpb.SubscribeReques
 					Target: target,
 					Elem: []*gpb.PathElem{
 						{
-							Name: target,
+							Name: "unknown-container",
 						},
 					},
 				},

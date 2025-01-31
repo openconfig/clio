@@ -4,8 +4,6 @@ receivers:
     collection_interval: 2s
     initial_delay: 1s
     metrics:
-      # State
-      
       # Uptime
       container.uptime:
         enabled: true
@@ -151,6 +149,8 @@ processors:
 
 exporters:
   gnmi:
+    target_name: "poodle"
+    origin: "shiba"
 
 service:
   pipelines:
