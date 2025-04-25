@@ -379,15 +379,15 @@ func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target stri
 			rms := ms.ResourceMetrics()
 			for i := 0; i < rms.Len(); i++ {
 				rm := rms.At(i)
+				cname := ""
 
-				// Extract container name from resource, default to "unknown-container".
-				cname := "unknown-container"
+				// Extract container name from resource, if not found, log error and continue.
 				cNameVal, ok := rm.Resource().Attributes().Get("container.name")
-				if ok {
-					if cNameVal.Type() == pcommon.ValueTypeStr {
-						cname = cNameVal.Str()
-					}
-					g.logger.Error("resource has non-string container name", zap.String("resource", fmt.Sprintf("%+v", rm.Resource().Attributes().AsRaw())))
+				if ok && cNameVal.Type() == pcommon.ValueTypeStr {
+					cname = cNameVal.Str()
+				} else {
+					g.logger.Error("resource is not associated with a container name formatted as a string", zap.String("resource", fmt.Sprintf("%+v", rm.Resource().Attributes().AsRaw())))
+					continue
 				}
 
 				// Iterate over all instrument scopes within the resource (e.g., module within an app).

@@ -3,7 +3,7 @@ module github.com/openconfig/clio
 go 1.22
 
 require (
-	github.com/google/go-cmp v0.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/dockerstatsreceiver v0.102.0
 	github.com/openconfig/gnmi v0.11.0
 	github.com/openconfig/magna v0.0.0-20240326180454-518e16696c84

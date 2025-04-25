@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//      httinMetric://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,9 +20,30 @@ import (
 	"testing"
 	"time"
 
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
+
+	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	ompb "go.opentelemetry.io/proto/otlp/metrics/v1"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+)
+
+var (
+	metricStartTimestamp = pcommon.NewTimestampFromTime(time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC))
+	metricTimestamp      = pcommon.NewTimestampFromTime(time.Date(2020, 2, 11, 20, 26, 13, 789, time.UTC))
+)
+
+const (
+	TestSumIntMetricName               = "sum/int_and_double"
+	TestHistogramMetricName            = "histogram/double"
+	TestExponentialHistogramMetricName = "exponential-histogram/double"
+	TestGaugeMetricName                = "gauge/int_and_double"
+	TestSummaryMetricName              = "summary/double"
 )
 
 func TestHandleMetrics(t *testing.T) {
@@ -32,16 +53,19 @@ func TestHandleMetrics(t *testing.T) {
 		InMetricType pmetric.MetricType
 		inTarget     string
 		inOrigin     string
+		inResAttrs   map[string]string
 		wantCnt      int
 	}{
 		{
 			name:         "gauge-10",
+			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeGauge,
 			wantCnt:      20,
 		},
 		{
 			name:         "gauge-10-with-target",
+			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeGauge,
 			inTarget:     "moo-deng",
@@ -49,6 +73,7 @@ func TestHandleMetrics(t *testing.T) {
 		},
 		{
 			name:         "gauge-10-with-origin",
+			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeGauge,
 			inOrigin:     "capybara",
@@ -56,6 +81,7 @@ func TestHandleMetrics(t *testing.T) {
 		},
 		{
 			name:         "gauge-10-with-target-and-origin",
+			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeGauge,
 			inTarget:     "seals-on-ice-floe",
@@ -64,24 +90,28 @@ func TestHandleMetrics(t *testing.T) {
 		},
 		{
 			name:         "sum-10",
+			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeSum,
 			wantCnt:      20,
 		},
 		{
 			name:         "histogram-10",
+			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeHistogram,
 			wantCnt:      20,
 		},
 		{
 			name:         "exponential-histogram-10",
+			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeExponentialHistogram,
 			wantCnt:      20,
 		},
 		{
 			name:         "summary-10",
+			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeSummary,
 			wantCnt:      20,
@@ -90,6 +120,7 @@ func TestHandleMetrics(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			g := &GNMI{
+				logger: zap.NewExample(),
 				cfg: &Config{
 					TargetName: tc.inTarget,
 					Sep:        "/",
@@ -107,7 +138,7 @@ func TestHandleMetrics(t *testing.T) {
 				return nil
 			}
 
-			td := GenerateMetrics(tc.inCnt, tc.InMetricType)
+			td := GenerateMetrics(tc.inCnt, tc.InMetricType, tc.inResAttrs)
 			g.handleMetrics(nil, updateFn, "", nil)
 			if err := g.storeMetric(context.Background(), td); err != nil {
 				t.Errorf("storeMetric returned error: %v", err)
@@ -132,21 +163,8 @@ func TestHandleMetrics(t *testing.T) {
 	}
 }
 
-var (
-	metricStartTimestamp = pcommon.NewTimestampFromTime(time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC))
-	metricTimestamp      = pcommon.NewTimestampFromTime(time.Date(2020, 2, 11, 20, 26, 13, 789, time.UTC))
-)
-
-const (
-	TestSumIntMetricName               = "sum/int_and_double"
-	TestHistogramMetricName            = "histogram/double"
-	TestExponentialHistogramMetricName = "exponential-histogram/double"
-	TestGaugeMetricName                = "gauge/int_and_double"
-	TestSummaryMetricName              = "summary/double"
-)
-
-func GenerateMetrics(count int, ty pmetric.MetricType) pmetric.Metrics {
-	md := generateMetricsOneEmptyInstrumentationScope()
+func GenerateMetrics(count int, ty pmetric.MetricType, resAttrs map[string]string) pmetric.Metrics {
+	md := generateMetricsOneEmptyInstrumentationScope(resAttrs)
 	ms := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
 	ms.EnsureCapacity(count)
 
@@ -171,9 +189,12 @@ func initResource(r pcommon.Resource) {
 	r.Attributes().PutStr("resource-attr", "resource-attr-val-1")
 }
 
-func generateMetricsOneEmptyInstrumentationScope() pmetric.Metrics {
+func generateMetricsOneEmptyInstrumentationScope(resAttrs map[string]string) pmetric.Metrics {
 	md := pmetric.NewMetrics()
 	initResource(md.ResourceMetrics().AppendEmpty().Resource())
+	for k, v := range resAttrs {
+		md.ResourceMetrics().At(0).Resource().Attributes().PutStr(k, v)
+	}
 	md.ResourceMetrics().At(0).ScopeMetrics().AppendEmpty()
 	return md
 }
@@ -316,5 +337,393 @@ func initMetric(m pmetric.Metric, name string, ty pmetric.MetricType) {
 		histo.SetAggregationTemporality(pmetric.AggregationTemporalityDelta)
 	case pmetric.MetricTypeSummary:
 		m.SetEmptySummary()
+	}
+}
+
+func TestNotificationsFromMetric(t *testing.T) {
+	testPrefix := &gpb.Path{
+		Target: "test-target",
+		Origin: "test-origin",
+		Elem: []*gpb.PathElem{
+			{
+				Name: "test-target",
+			},
+		},
+	}
+
+	// anyWrapOrFatal is a convenience function to wrap a proto in an anypb.Any message.
+	anyWrapOrFatal := func(mgs proto.Message) *anypb.Any {
+		any, err := anypb.New(mgs)
+		if err != nil {
+			t.Fatalf("failed to wrap proto in anypb: %v", err)
+		}
+		return any
+	}
+
+	// The resource attributes are used to determine the container name/
+	resAttrs := map[string]string{"container.name": "test-container"}
+
+	// Special metric for which first update has attributes, and second update does not.
+	attredGaugeMetric := GenerateMetrics(10, pmetric.MetricTypeGauge, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0)
+	attredGaugeMetric.Gauge().DataPoints().At(0).Attributes().PutStr("the-key", "the-value")
+
+	tests := []struct {
+		name     string
+		inMetric pmetric.Metric
+		inTarget string
+		want     []*gpb.Notification
+	}{
+		{
+			name:     "gauge-simple",
+			inMetric: GenerateMetrics(10, pmetric.MetricTypeGauge, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
+			inTarget: "test-target",
+			want: []*gpb.Notification{
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "gauge"},
+									{Name: "int_and_double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_IntVal{
+									IntVal: 123,
+								},
+							},
+						},
+					},
+				},
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "gauge"},
+									{Name: "int_and_double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_DoubleVal{
+									DoubleVal: 456.0,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "gauge-with-attributes-in-first-update",
+			inMetric: attredGaugeMetric,
+			inTarget: "test-target",
+			want: []*gpb.Notification{
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "gauge"},
+									{
+										Name: "int_and_double",
+										Key:  map[string]string{"the-key": "the-value"},
+									},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_IntVal{
+									IntVal: 123,
+								},
+							},
+						},
+					},
+				},
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "gauge"},
+									{Name: "int_and_double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_DoubleVal{
+									DoubleVal: 456.0,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "sum-simple",
+			inMetric: GenerateMetrics(10, pmetric.MetricTypeSum, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
+			inTarget: "test-target",
+			want: []*gpb.Notification{
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "sum"},
+									{Name: "int_and_double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_IntVal{
+									IntVal: 123,
+								},
+							},
+						},
+					},
+				},
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "sum"},
+									{Name: "int_and_double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_DoubleVal{
+									DoubleVal: 456.7,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "histogram-simple",
+			inMetric: GenerateMetrics(10, pmetric.MetricTypeHistogram, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
+			inTarget: "test-target",
+			want: []*gpb.Notification{
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "histogram"},
+									{Name: "double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_AnyVal{
+									AnyVal: anyWrapOrFatal(&ompb.HistogramDataPoint{
+										Count:          110,
+										Min:            proto.Float64(1),
+										Max:            proto.Float64(91),
+										Sum:            proto.Float64(5555),
+										BucketCounts:   []uint64{0, 10, 100, 0},
+										ExplicitBounds: []float64{1.0, 10.0, 100.0},
+									}),
+								},
+							},
+						},
+					},
+				},
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "histogram"},
+									{Name: "double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_AnyVal{
+									AnyVal: anyWrapOrFatal(&ompb.HistogramDataPoint{
+										Count:          220,
+										Min:            proto.Float64(2),
+										Max:            proto.Float64(92),
+										Sum:            proto.Float64(7777),
+										BucketCounts:   []uint64{0, 20, 200, 0},
+										ExplicitBounds: []float64{1.0, 10.0, 100.0},
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "exponential-histogram-simple",
+			inMetric: GenerateMetrics(10, pmetric.MetricTypeExponentialHistogram, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
+			inTarget: "test-target",
+			want: []*gpb.Notification{
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "exponential-histogram"},
+									{Name: "double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_AnyVal{
+									AnyVal: anyWrapOrFatal(&ompb.ExponentialHistogramDataPoint{
+										Count: 6,
+										Min:   proto.Float64(1),
+										Max:   proto.Float64(3),
+										Sum:   proto.Float64(7.1),
+										Negative: &ompb.ExponentialHistogramDataPoint_Buckets{
+											BucketCounts: []uint64{1, 2, 3, 0},
+											Offset:       0,
+										},
+										Positive: &ompb.ExponentialHistogramDataPoint_Buckets{},
+										Scale:    3,
+									}),
+								},
+							},
+						},
+					},
+				},
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "exponential-histogram"},
+									{Name: "double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_AnyVal{
+									AnyVal: anyWrapOrFatal(&ompb.ExponentialHistogramDataPoint{
+										Count: 7,
+										Min:   proto.Float64(2),
+										Max:   proto.Float64(3),
+										Sum:   proto.Float64(7.95),
+										Negative: &ompb.ExponentialHistogramDataPoint_Buckets{
+											BucketCounts: []uint64{3, 2, 2, 0},
+											Offset:       0,
+										},
+										Positive: &ompb.ExponentialHistogramDataPoint_Buckets{},
+										Scale:    3,
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "summary-simple",
+			inMetric: GenerateMetrics(10, pmetric.MetricTypeSummary, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
+			inTarget: "test-target",
+			want: []*gpb.Notification{
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "summary"},
+									{Name: "double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_AnyVal{
+									AnyVal: anyWrapOrFatal(&ompb.SummaryDataPoint{
+										QuantileValues: []*ompb.SummaryDataPoint_ValueAtQuantile{
+											&ompb.SummaryDataPoint_ValueAtQuantile{
+												Quantile: 0.95,
+												Value:    9.5,
+											},
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+				&gpb.Notification{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						&gpb.Update{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Origin: "test-origin",
+								Elem: []*gpb.PathElem{
+									{Name: "summary"},
+									{Name: "double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_AnyVal{
+									AnyVal: anyWrapOrFatal(&ompb.SummaryDataPoint{
+										QuantileValues: []*ompb.SummaryDataPoint_ValueAtQuantile{
+											&ompb.SummaryDataPoint_ValueAtQuantile{
+												Quantile: 0.9,
+												Value:    9.0,
+											},
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &GNMI{
+				logger: zap.NewExample(),
+				cfg: &Config{
+					TargetName: tc.inTarget,
+					Sep:        "/",
+					Origin:     "test-origin",
+				},
+			}
+			got := g.notificationsFromMetric(tc.inMetric, tc.inTarget)
+			if diff := cmp.Diff(tc.want, got, protocmp.Transform(), cmpopts.EquateEmpty(), protocmp.IgnoreFields(&gpb.Notification{}, "timestamp")); diff != "" {
+				t.Errorf("notificationsFromMetric(%v, %q) returned an unexpected diff (-want +got): %v", tc.inMetric, tc.inTarget, diff)
+			}
+		})
 	}
 }
