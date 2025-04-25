@@ -378,10 +378,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 			inMetric: GenerateMetrics(10, pmetric.MetricTypeGauge, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
 			inTarget: "test-target",
 			want: []*gpb.Notification{
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -398,10 +398,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 						},
 					},
 				},
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -425,10 +425,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 			inMetric: attredGaugeMetric,
 			inTarget: "test-target",
 			want: []*gpb.Notification{
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -448,10 +448,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 						},
 					},
 				},
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -475,10 +475,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 			inMetric: GenerateMetrics(10, pmetric.MetricTypeSum, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
 			inTarget: "test-target",
 			want: []*gpb.Notification{
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -495,10 +495,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 						},
 					},
 				},
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -522,10 +522,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 			inMetric: GenerateMetrics(10, pmetric.MetricTypeHistogram, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
 			inTarget: "test-target",
 			want: []*gpb.Notification{
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -549,10 +549,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 						},
 					},
 				},
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -583,10 +583,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 			inMetric: GenerateMetrics(10, pmetric.MetricTypeExponentialHistogram, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
 			inTarget: "test-target",
 			want: []*gpb.Notification{
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -614,10 +614,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 						},
 					},
 				},
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -652,10 +652,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 			inMetric: GenerateMetrics(10, pmetric.MetricTypeSummary, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
 			inTarget: "test-target",
 			want: []*gpb.Notification{
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -668,7 +668,7 @@ func TestNotificationsFromMetric(t *testing.T) {
 								Value: &gpb.TypedValue_AnyVal{
 									AnyVal: anyWrapOrFatal(&ompb.SummaryDataPoint{
 										QuantileValues: []*ompb.SummaryDataPoint_ValueAtQuantile{
-											&ompb.SummaryDataPoint_ValueAtQuantile{
+											{
 												Quantile: 0.95,
 												Value:    9.5,
 											},
@@ -679,10 +679,10 @@ func TestNotificationsFromMetric(t *testing.T) {
 						},
 					},
 				},
-				&gpb.Notification{
+				{
 					Prefix: testPrefix,
 					Update: []*gpb.Update{
-						&gpb.Update{
+						{
 							Path: &gpb.Path{
 								Target: "test-target",
 								Origin: "test-origin",
@@ -695,7 +695,7 @@ func TestNotificationsFromMetric(t *testing.T) {
 								Value: &gpb.TypedValue_AnyVal{
 									AnyVal: anyWrapOrFatal(&ompb.SummaryDataPoint{
 										QuantileValues: []*ompb.SummaryDataPoint_ValueAtQuantile{
-											&ompb.SummaryDataPoint_ValueAtQuantile{
+											{
 												Quantile: 0.9,
 												Value:    9.0,
 											},
