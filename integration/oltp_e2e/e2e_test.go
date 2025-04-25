@@ -40,9 +40,10 @@ func subscribeRequestForTarget(t *testing.T, target string) *gpb.SubscribeReques
 					Target: target,
 					Elem: []*gpb.PathElem{
 						{
-							Name: "unknown-container",
+							Name: "test-container",
 						},
 					},
+					Origin: "clio",
 				},
 				Mode: gpb.SubscriptionList_STREAM,
 				Subscription: []*gpb.Subscription{
@@ -224,6 +225,10 @@ func generateMetrics(t *testing.T) pmetric.Metrics {
 	md.ResourceMetrics().At(0).ScopeMetrics().AppendEmpty().Scope().SetName("resource-0-scope-0")
 	md.ResourceMetrics().At(0).ScopeMetrics().AppendEmpty().Scope().SetName("resource-0-scope-1")
 	md.ResourceMetrics().At(1).ScopeMetrics().AppendEmpty().Scope().SetName("resource-1-scope-0")
+
+	// Ensure container names are set.
+	md.ResourceMetrics().At(0).Resource().Attributes().PutStr("container.name", "test-container")
+	md.ResourceMetrics().At(1).Resource().Attributes().PutStr("container.name", "test-container")
 
 	// Initialize metrics.
 	r0s0 := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
