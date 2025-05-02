@@ -356,7 +356,6 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric, container string) []*gp
 				{
 					Path: &gpb.Path{
 						Target: g.cfg.TargetName,
-						Origin: g.cfg.Origin,
 						Elem:   elems,
 					},
 					Val: val,
