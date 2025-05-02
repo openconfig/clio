@@ -152,9 +152,6 @@ func TestHandleMetrics(t *testing.T) {
 				t.Errorf("missing updates: want %d got %d", tc.wantCnt, len(n.Update))
 			}
 			for _, u := range n.Update {
-				if u.Path.Origin != tc.inOrigin {
-					t.Errorf("origin mismatch: want %s got %s", tc.inOrigin, u.Path.Origin)
-				}
 				if u.Path.Target != tc.inTarget {
 					t.Errorf("target mismatch: want %s got %s", tc.inTarget, u.Path.Target)
 				}
@@ -384,7 +381,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "gauge"},
 									{Name: "int_and_double"},
@@ -404,7 +400,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "gauge"},
 									{Name: "int_and_double"},
@@ -431,7 +426,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "gauge"},
 									{
@@ -454,7 +448,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "gauge"},
 									{Name: "int_and_double"},
@@ -481,7 +474,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "sum"},
 									{Name: "int_and_double"},
@@ -501,7 +493,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "sum"},
 									{Name: "int_and_double"},
@@ -528,7 +519,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "histogram"},
 									{Name: "double"},
@@ -555,7 +545,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "histogram"},
 									{Name: "double"},
@@ -589,7 +578,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "exponential-histogram"},
 									{Name: "double"},
@@ -620,7 +608,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "exponential-histogram"},
 									{Name: "double"},
@@ -658,7 +645,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "summary"},
 									{Name: "double"},
@@ -685,7 +671,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Origin: "test-origin",
 								Elem: []*gpb.PathElem{
 									{Name: "summary"},
 									{Name: "double"},
