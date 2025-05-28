@@ -17,12 +17,7 @@ package collector
 import (
 	"github.com/openconfig/clio/gnmi"
 	"github.com/openconfig/clio/gnmipath"
-	"go.opentelemetry.io/collector/connector"
-	"go.opentelemetry.io/collector/exporter"
-	"go.opentelemetry.io/collector/extension"
 	"go.opentelemetry.io/collector/otelcol"
-	"go.opentelemetry.io/collector/processor"
-	"go.opentelemetry.io/collector/receiver"
 
 	dockerstatsreceiver "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/dockerstatsreceiver"
 	otlpreceiver "go.opentelemetry.io/collector/receiver/otlpreceiver"
@@ -33,12 +28,7 @@ func Components() (otelcol.Factories, error) {
 	var err error
 	factories := otelcol.Factories{}
 
-	factories.Extensions, err = extension.MakeFactoryMap()
-	if err != nil {
-		return otelcol.Factories{}, err
-	}
-
-	factories.Receivers, err = receiver.MakeFactoryMap(
+	factories.Receivers, err = otelcol.MakeFactoryMap(
 		otlpreceiver.NewFactory(),
 		dockerstatsreceiver.NewFactory(),
 	)
@@ -46,21 +36,16 @@ func Components() (otelcol.Factories, error) {
 		return otelcol.Factories{}, err
 	}
 
-	factories.Exporters, err = exporter.MakeFactoryMap(
+	factories.Exporters, err = otelcol.MakeFactoryMap(
 		gnmi.NewFactory(),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
 	}
 
-	factories.Processors, err = processor.MakeFactoryMap(
+	factories.Processors, err = otelcol.MakeFactoryMap(
 		gnmipath.NewFactory(),
 	)
-	if err != nil {
-		return otelcol.Factories{}, err
-	}
-
-	factories.Connectors, err = connector.MakeFactoryMap()
 	if err != nil {
 		return otelcol.Factories{}, err
 	}

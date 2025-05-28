@@ -366,6 +366,34 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric, container string) []*gp
 	return notis
 }
 
+// notificationsFromLabels returns a list of gNMI notifications based on a map of labels. Given that
+// the labels are fetched from the same dockerstatereceiver.scrapev2 call as the other container
+// metrics, we can draft most notification fields --- e.g., timestamps and prefixes --- from a
+// reference notification.
+func (g *GNMI) notificationsFromLabels(m pcommon.Map, ref *gpb.Notification) []*gpb.Notification {
+	var notis []*gpb.Notification
+	for k, v := range m.All() {
+		notis = append(notis, &gpb.Notification{
+			Timestamp: ref.GetTimestamp(),
+			Prefix:    ref.GetPrefix(),
+			Update: []*gpb.Update{
+				{
+					Path: &gpb.Path{
+						Target: ref.GetPrefix().GetTarget(),
+						Elem:   []*gpb.PathElem{{Name: "labels"}, {Name: k}},
+					},
+					Val: &gpb.TypedValue{
+						Value: &gpb.TypedValue_StringVal{
+							StringVal: v.AsString(),
+						},
+					},
+				},
+			},
+		})
+	}
+	return notis
+}
+
 // handleMetrics iterates over all received metrics and converts them into a
 // gNMI update. This set of updates are then packed into a gNMI notification
 // and sent to the telemetry server.
@@ -400,6 +428,12 @@ func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target stri
 						m := ms.At(k)
 						notis = append(notis, g.notificationsFromMetric(m, cname)...)
 					}
+				}
+
+				// Obtain notifications for labels.
+				lmap, ok := rm.Resource().Attributes().Get("container.labels")
+				if ok && lmap.Type() == pcommon.ValueTypeMap && len(notis) > 0 {
+					notis = append(notis, g.notificationsFromLabels(lmap.Map(), notis[0])...)
 				}
 			}
 

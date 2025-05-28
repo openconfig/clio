@@ -61,7 +61,7 @@ func TestHandleMetrics(t *testing.T) {
 			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeGauge,
-			wantCnt:      20,
+			wantCnt:      21,
 		},
 		{
 			name:         "gauge-10-with-target",
@@ -69,7 +69,7 @@ func TestHandleMetrics(t *testing.T) {
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeGauge,
 			inTarget:     "moo-deng",
-			wantCnt:      20,
+			wantCnt:      21,
 		},
 		{
 			name:         "gauge-10-with-origin",
@@ -77,7 +77,7 @@ func TestHandleMetrics(t *testing.T) {
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeGauge,
 			inOrigin:     "capybara",
-			wantCnt:      20,
+			wantCnt:      21,
 		},
 		{
 			name:         "gauge-10-with-target-and-origin",
@@ -86,35 +86,35 @@ func TestHandleMetrics(t *testing.T) {
 			InMetricType: pmetric.MetricTypeGauge,
 			inTarget:     "seals-on-ice-floe",
 			inOrigin:     "orca-gang",
-			wantCnt:      20,
+			wantCnt:      21,
 		},
 		{
 			name:         "sum-10",
 			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeSum,
-			wantCnt:      20,
+			wantCnt:      21,
 		},
 		{
 			name:         "histogram-10",
 			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeHistogram,
-			wantCnt:      20,
+			wantCnt:      21,
 		},
 		{
 			name:         "exponential-histogram-10",
 			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeExponentialHistogram,
-			wantCnt:      20,
+			wantCnt:      21,
 		},
 		{
 			name:         "summary-10",
 			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeSummary,
-			wantCnt:      20,
+			wantCnt:      21,
 		},
 	}
 	for _, tc := range tests {
@@ -184,6 +184,8 @@ func GenerateMetrics(count int, ty pmetric.MetricType, resAttrs map[string]strin
 
 func initResource(r pcommon.Resource) {
 	r.Attributes().PutStr("resource-attr", "resource-attr-val-1")
+	r.Attributes().PutStr("container.name", "test-container")
+	r.Attributes().PutEmptyMap("container.labels").FromRaw(map[string]any{"i-am": "groot"})
 }
 
 func generateMetricsOneEmptyInstrumentationScope(resAttrs map[string]string) pmetric.Metrics {
@@ -711,4 +713,110 @@ func TestNotificationsFromMetric(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNotificationsFromLabels(t *testing.T) {
+	tests := []struct {
+		name     string
+		inLabels map[string]any
+		inRef    *gpb.Notification
+		want     []*gpb.Notification
+	}{
+		{
+			name: "simple",
+			inLabels: map[string]any{
+				"container.version": "1.0.0",
+				"i.am.a":            "fancy.label",
+			},
+			inRef: &gpb.Notification{
+				Prefix: &gpb.Path{
+					Target: "test-target",
+					Elem:   []*gpb.PathElem{{Name: "fancy"}, {Name: "path"}},
+					Origin: "test-origin",
+				},
+				Update: []*gpb.Update{
+					{
+						Path: &gpb.Path{
+							Target: "test-target",
+							Elem:   []*gpb.PathElem{{Name: "test-target"}},
+						},
+						Val: &gpb.TypedValue{
+							Value: &gpb.TypedValue_IntVal{
+								IntVal: 123,
+							},
+						},
+					},
+				},
+			},
+			want: []*gpb.Notification{
+				{
+					Prefix: &gpb.Path{
+						Target: "test-target",
+						Elem:   []*gpb.PathElem{{Name: "fancy"}, {Name: "path"}},
+						Origin: "test-origin",
+					},
+					Update: []*gpb.Update{
+						{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Elem:   []*gpb.PathElem{{Name: "labels"}, {Name: "container.version"}},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_StringVal{
+									StringVal: "1.0.0",
+								},
+							},
+						},
+					},
+				},
+				{
+					Prefix: &gpb.Path{
+						Target: "test-target",
+						Elem:   []*gpb.PathElem{{Name: "fancy"}, {Name: "path"}},
+						Origin: "test-origin",
+					},
+					Update: []*gpb.Update{
+						{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Elem:   []*gpb.PathElem{{Name: "labels"}, {Name: "i.am.a"}},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_StringVal{
+									StringVal: "fancy.label",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &GNMI{
+				logger: zap.NewExample(),
+				cfg: &Config{
+					TargetName: "test-target",
+					Sep:        "/",
+					Origin:     "test-origin",
+				},
+			}
+
+			lMap := pcommon.NewMap()
+			if err := lMap.FromRaw(tc.inLabels); err != nil {
+				t.Fatalf("failed to create label map: %v", err)
+			}
+
+			// Ensure order stability.
+			sortProtos := cmpopts.SortSlices(func(m1, m2 *gpb.Notification) bool {
+				return m1.String() < m2.String()
+			})
+			got := g.notificationsFromLabels(lMap, tc.inRef)
+			if diff := cmp.Diff(tc.want, got, protocmp.Transform(), cmpopts.EquateEmpty(), sortProtos); diff != "" {
+				t.Errorf("notificationsFromLabels(%v, %v) returned an unexpected diff (-want +got): %v", tc.inLabels, tc.inRef, diff)
+			}
+		})
+	}
+
 }
