@@ -749,7 +749,7 @@ func TestNotificationsFromLabels(t *testing.T) {
 				},
 			},
 			want: []*gpb.Notification{
-				&gpb.Notification{
+				{
 					Prefix: &gpb.Path{
 						Target: "test-target",
 						Elem:   []*gpb.PathElem{{Name: "fancy"}, {Name: "path"}},
@@ -769,7 +769,7 @@ func TestNotificationsFromLabels(t *testing.T) {
 						},
 					},
 				},
-				&gpb.Notification{
+				{
 					Prefix: &gpb.Path{
 						Target: "test-target",
 						Elem:   []*gpb.PathElem{{Name: "fancy"}, {Name: "path"}},
