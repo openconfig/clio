@@ -47,6 +47,23 @@ const (
 )
 
 func TestHandleMetrics(t *testing.T) {
+	expectedPfx := func(origin, target, container string) *gpb.Path {
+		return &gpb.Path{
+			Origin: origin,
+			Target: target,
+			Elem: []*gpb.PathElem{
+				{
+					Name: "containers",
+				},
+				{
+					Name: "container",
+					Key: map[string]string{
+						"name": container,
+					},
+				},
+			},
+		}
+	}
 	tests := []struct {
 		name         string
 		inCnt        int
@@ -54,6 +71,7 @@ func TestHandleMetrics(t *testing.T) {
 		inTarget     string
 		inOrigin     string
 		inResAttrs   map[string]string
+		wantPrefix   *gpb.Path
 		wantCnt      int
 	}{
 		{
@@ -61,6 +79,7 @@ func TestHandleMetrics(t *testing.T) {
 			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeGauge,
+			wantPrefix:   expectedPfx("", "", "test-container"),
 			wantCnt:      21,
 		},
 		{
@@ -69,6 +88,7 @@ func TestHandleMetrics(t *testing.T) {
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeGauge,
 			inTarget:     "moo-deng",
+			wantPrefix:   expectedPfx("", "moo-deng", "test-container"),
 			wantCnt:      21,
 		},
 		{
@@ -77,6 +97,7 @@ func TestHandleMetrics(t *testing.T) {
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeGauge,
 			inOrigin:     "capybara",
+			wantPrefix:   expectedPfx("capybara", "", "test-container"),
 			wantCnt:      21,
 		},
 		{
@@ -86,6 +107,7 @@ func TestHandleMetrics(t *testing.T) {
 			InMetricType: pmetric.MetricTypeGauge,
 			inTarget:     "seals-on-ice-floe",
 			inOrigin:     "orca-gang",
+			wantPrefix:   expectedPfx("orca-gang", "seals-on-ice-floe", "test-container"),
 			wantCnt:      21,
 		},
 		{
@@ -93,6 +115,7 @@ func TestHandleMetrics(t *testing.T) {
 			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeSum,
+			wantPrefix:   expectedPfx("", "", "test-container"),
 			wantCnt:      21,
 		},
 		{
@@ -100,6 +123,7 @@ func TestHandleMetrics(t *testing.T) {
 			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeHistogram,
+			wantPrefix:   expectedPfx("", "", "test-container"),
 			wantCnt:      21,
 		},
 		{
@@ -107,6 +131,7 @@ func TestHandleMetrics(t *testing.T) {
 			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeExponentialHistogram,
+			wantPrefix:   expectedPfx("", "", "test-container"),
 			wantCnt:      21,
 		},
 		{
@@ -114,6 +139,7 @@ func TestHandleMetrics(t *testing.T) {
 			inResAttrs:   map[string]string{"container.name": "test-container"},
 			inCnt:        10,
 			InMetricType: pmetric.MetricTypeSummary,
+			wantPrefix:   expectedPfx("", "", "test-container"),
 			wantCnt:      21,
 		},
 	}
@@ -129,12 +155,12 @@ func TestHandleMetrics(t *testing.T) {
 				metricCh: make(chan *pmetric.Metrics, 10),
 			}
 
-			n := &gpb.Notification{}
+			var notifs []*gpb.Notification
 			var nMu sync.Mutex
-			updateFn := func(notif *gpb.Notification) error {
+			updateFn := func(n *gpb.Notification) error {
 				nMu.Lock()
 				defer nMu.Unlock()
-				n.Update = append(n.Update, notif.Update...)
+				notifs = append(notifs, n)
 				return nil
 			}
 
@@ -148,12 +174,12 @@ func TestHandleMetrics(t *testing.T) {
 			time.Sleep(time.Second)
 			nMu.Lock()
 			defer nMu.Unlock()
-			if len(n.Update) != tc.wantCnt {
-				t.Errorf("missing updates: want %d got %d", tc.wantCnt, len(n.Update))
+			if len(notifs) != tc.wantCnt {
+				t.Errorf("missing updates: want %d got %d", tc.wantCnt, len(notifs))
 			}
-			for _, u := range n.Update {
-				if u.Path.Target != tc.inTarget {
-					t.Errorf("target mismatch: want %s got %s", tc.inTarget, u.Path.Target)
+			for _, n := range notifs {
+				if diff := cmp.Diff(n.Prefix, tc.wantPrefix, protocmp.Transform()); diff != "" {
+					t.Errorf("prefix mismatch: diff (-want +got):\n%s", diff)
 				}
 			}
 		})
@@ -345,7 +371,11 @@ func TestNotificationsFromMetric(t *testing.T) {
 		Origin: "test-origin",
 		Elem: []*gpb.PathElem{
 			{
-				Name: "test-target",
+				Name: "containers",
+			},
+			{
+				Name: "container",
+				Key:  map[string]string{"name": "test-container"},
 			},
 		},
 	}
@@ -369,13 +399,11 @@ func TestNotificationsFromMetric(t *testing.T) {
 	tests := []struct {
 		name     string
 		inMetric pmetric.Metric
-		inTarget string
 		want     []*gpb.Notification
 	}{
 		{
 			name:     "gauge-simple",
 			inMetric: GenerateMetrics(10, pmetric.MetricTypeGauge, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
-			inTarget: "test-target",
 			want: []*gpb.Notification{
 				{
 					Prefix: testPrefix,
@@ -420,7 +448,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 		{
 			name:     "gauge-with-attributes-in-first-update",
 			inMetric: attredGaugeMetric,
-			inTarget: "test-target",
 			want: []*gpb.Notification{
 				{
 					Prefix: testPrefix,
@@ -468,7 +495,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 		{
 			name:     "sum-simple",
 			inMetric: GenerateMetrics(10, pmetric.MetricTypeSum, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
-			inTarget: "test-target",
 			want: []*gpb.Notification{
 				{
 					Prefix: testPrefix,
@@ -513,7 +539,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 		{
 			name:     "histogram-simple",
 			inMetric: GenerateMetrics(10, pmetric.MetricTypeHistogram, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
-			inTarget: "test-target",
 			want: []*gpb.Notification{
 				{
 					Prefix: testPrefix,
@@ -572,7 +597,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 		{
 			name:     "exponential-histogram-simple",
 			inMetric: GenerateMetrics(10, pmetric.MetricTypeExponentialHistogram, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
-			inTarget: "test-target",
 			want: []*gpb.Notification{
 				{
 					Prefix: testPrefix,
@@ -639,7 +663,6 @@ func TestNotificationsFromMetric(t *testing.T) {
 		{
 			name:     "summary-simple",
 			inMetric: GenerateMetrics(10, pmetric.MetricTypeSummary, resAttrs).ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0),
-			inTarget: "test-target",
 			want: []*gpb.Notification{
 				{
 					Prefix: testPrefix,
@@ -702,14 +725,14 @@ func TestNotificationsFromMetric(t *testing.T) {
 			g := &GNMI{
 				logger: zap.NewExample(),
 				cfg: &Config{
-					TargetName: tc.inTarget,
+					TargetName: "test-target",
 					Sep:        "/",
 					Origin:     "test-origin",
 				},
 			}
-			got := g.notificationsFromMetric(tc.inMetric, tc.inTarget)
+			got := g.notificationsFromMetric(tc.inMetric, "test-container")
 			if diff := cmp.Diff(tc.want, got, protocmp.Transform(), cmpopts.EquateEmpty(), protocmp.IgnoreFields(&gpb.Notification{}, "timestamp")); diff != "" {
-				t.Errorf("notificationsFromMetric(%v, %q) returned an unexpected diff (-want +got): %v", tc.inMetric, tc.inTarget, diff)
+				t.Errorf("notificationsFromMetric(%v, 'test-container') returned an unexpected diff (-want +got): %v", tc.inMetric, diff)
 			}
 		})
 	}

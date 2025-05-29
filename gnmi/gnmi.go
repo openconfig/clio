@@ -348,7 +348,11 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric, container string) []*gp
 				Target: g.cfg.TargetName,
 				Elem: []*gpb.PathElem{
 					{
-						Name: container,
+						Name: "containers",
+					},
+					{
+						Name: "container",
+						Key:  map[string]string{"name": container},
 					},
 				},
 			},
