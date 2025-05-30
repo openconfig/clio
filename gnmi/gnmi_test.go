@@ -742,7 +742,6 @@ func TestNotificationsFromLabels(t *testing.T) {
 	tests := []struct {
 		name     string
 		inLabels map[string]any
-		inRef    *gpb.Notification
 		want     []*gpb.Notification
 	}{
 		{
@@ -751,38 +750,32 @@ func TestNotificationsFromLabels(t *testing.T) {
 				"container.version": "1.0.0",
 				"i.am.a":            "fancy.label",
 			},
-			inRef: &gpb.Notification{
-				Prefix: &gpb.Path{
-					Target: "test-target",
-					Elem:   []*gpb.PathElem{{Name: "fancy"}, {Name: "path"}},
-					Origin: "test-origin",
-				},
-				Update: []*gpb.Update{
-					{
-						Path: &gpb.Path{
-							Target: "test-target",
-							Elem:   []*gpb.PathElem{{Name: "test-target"}},
-						},
-						Val: &gpb.TypedValue{
-							Value: &gpb.TypedValue_IntVal{
-								IntVal: 123,
-							},
-						},
-					},
-				},
-			},
 			want: []*gpb.Notification{
 				{
 					Prefix: &gpb.Path{
 						Target: "test-target",
-						Elem:   []*gpb.PathElem{{Name: "fancy"}, {Name: "path"}},
+						Elem: []*gpb.PathElem{
+							{
+								Name: "containers",
+							},
+							{
+								Name: "container",
+								Key:  map[string]string{"name": "simple"},
+							},
+						},
 						Origin: "test-origin",
 					},
 					Update: []*gpb.Update{
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Elem:   []*gpb.PathElem{{Name: "labels"}, {Name: "container.version"}},
+								Elem: []*gpb.PathElem{
+									{Name: "labels"},
+									{
+										Name: "label",
+										Key:  map[string]string{"name": "container.version"},
+									},
+								},
 							},
 							Val: &gpb.TypedValue{
 								Value: &gpb.TypedValue_StringVal{
@@ -795,14 +788,28 @@ func TestNotificationsFromLabels(t *testing.T) {
 				{
 					Prefix: &gpb.Path{
 						Target: "test-target",
-						Elem:   []*gpb.PathElem{{Name: "fancy"}, {Name: "path"}},
+						Elem: []*gpb.PathElem{
+							{
+								Name: "containers",
+							},
+							{
+								Name: "container",
+								Key:  map[string]string{"name": "simple"},
+							},
+						},
 						Origin: "test-origin",
 					},
 					Update: []*gpb.Update{
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Elem:   []*gpb.PathElem{{Name: "labels"}, {Name: "i.am.a"}},
+								Elem: []*gpb.PathElem{
+									{Name: "labels"},
+									{
+										Name: "label",
+										Key:  map[string]string{"name": "i.am.a"},
+									},
+								},
 							},
 							Val: &gpb.TypedValue{
 								Value: &gpb.TypedValue_StringVal{
@@ -835,9 +842,9 @@ func TestNotificationsFromLabels(t *testing.T) {
 			sortProtos := cmpopts.SortSlices(func(m1, m2 *gpb.Notification) bool {
 				return m1.String() < m2.String()
 			})
-			got := g.notificationsFromLabels(lMap, tc.inRef)
-			if diff := cmp.Diff(tc.want, got, protocmp.Transform(), cmpopts.EquateEmpty(), sortProtos); diff != "" {
-				t.Errorf("notificationsFromLabels(%v, %v) returned an unexpected diff (-want +got): %v", tc.inLabels, tc.inRef, diff)
+			got := g.notificationsFromLabels(lMap, tc.name)
+			if diff := cmp.Diff(tc.want, got, protocmp.Transform(), cmpopts.EquateEmpty(), sortProtos, protocmp.IgnoreFields(&gpb.Notification{}, "timestamp")); diff != "" {
+				t.Errorf("notificationsFromLabels(%v) returned an unexpected diff (-want +got): %v", tc.inLabels, diff)
 			}
 		})
 	}
