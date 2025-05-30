@@ -775,14 +775,28 @@ func TestNotificationsFromLabels(t *testing.T) {
 				{
 					Prefix: &gpb.Path{
 						Target: "test-target",
-						Elem:   []*gpb.PathElem{{Name: "fancy"}, {Name: "path"}},
+						Elem: []*gpb.PathElem{
+							{
+								Name: "containers",
+							},
+							{
+								Name: "container",
+								Key:  map[string]string{"name": "simple"},
+							},
+						},
 						Origin: "test-origin",
 					},
 					Update: []*gpb.Update{
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Elem:   []*gpb.PathElem{{Name: "labels"}, {Name: "container.version"}},
+								Elem: []*gpb.PathElem{
+									{Name: "labels"},
+									{
+										Name: "label",
+										Key:  map[string]string{"name": "container.version"},
+									},
+								},
 							},
 							Val: &gpb.TypedValue{
 								Value: &gpb.TypedValue_StringVal{
@@ -795,14 +809,28 @@ func TestNotificationsFromLabels(t *testing.T) {
 				{
 					Prefix: &gpb.Path{
 						Target: "test-target",
-						Elem:   []*gpb.PathElem{{Name: "fancy"}, {Name: "path"}},
+						Elem: []*gpb.PathElem{
+							{
+								Name: "containers",
+							},
+							{
+								Name: "container",
+								Key:  map[string]string{"name": "simple"},
+							},
+						},
 						Origin: "test-origin",
 					},
 					Update: []*gpb.Update{
 						{
 							Path: &gpb.Path{
 								Target: "test-target",
-								Elem:   []*gpb.PathElem{{Name: "labels"}, {Name: "i.am.a"}},
+								Elem: []*gpb.PathElem{
+									{Name: "labels"},
+									{
+										Name: "label",
+										Key:  map[string]string{"name": "i.am.a"},
+									},
+								},
 							},
 							Val: &gpb.TypedValue{
 								Value: &gpb.TypedValue_StringVal{
@@ -835,7 +863,7 @@ func TestNotificationsFromLabels(t *testing.T) {
 			sortProtos := cmpopts.SortSlices(func(m1, m2 *gpb.Notification) bool {
 				return m1.String() < m2.String()
 			})
-			got := g.notificationsFromLabels(lMap, tc.inRef)
+			got := g.notificationsFromLabels(lMap, tc.name, tc.inRef)
 			if diff := cmp.Diff(tc.want, got, protocmp.Transform(), cmpopts.EquateEmpty(), sortProtos); diff != "" {
 				t.Errorf("notificationsFromLabels(%v, %v) returned an unexpected diff (-want +got): %v", tc.inLabels, tc.inRef, diff)
 			}
