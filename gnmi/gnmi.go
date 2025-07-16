@@ -380,7 +380,7 @@ func (g *GNMI) notificationsFromLabels(m pcommon.Map, cname string) []*gpb.Notif
 
 	for k, v := range m.All() {
 		notis = append(notis, &gpb.Notification{
-			Timestamp: time.Now().Unix(),
+			Timestamp: time.Now().UnixNano(),
 			Prefix: &gpb.Path{
 				Origin: g.cfg.Origin,
 				Target: g.cfg.TargetName,
