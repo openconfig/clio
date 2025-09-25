@@ -343,7 +343,7 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric, container string) []*gp
 		}
 
 		notis = append(notis, &gpb.Notification{
-			Timestamp: timestamps[i].AsTime().Unix(),
+			Timestamp: timestamps[i].AsTime().UnixNano(),
 			Prefix: &gpb.Path{
 				Origin: g.cfg.Origin,
 				Target: g.cfg.TargetName,
