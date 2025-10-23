@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/openconfig/ygot/testutil"
 	ompb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	anypb "google.golang.org/protobuf/types/known/anypb"
 )
@@ -842,8 +843,14 @@ func TestNotificationsFromLabels(t *testing.T) {
 			sortProtos := cmpopts.SortSlices(func(m1, m2 *gpb.Notification) bool {
 				return m1.String() < m2.String()
 			})
+
 			got := g.notificationsFromLabels(lMap, tc.name)
-			if diff := cmp.Diff(tc.want, got, protocmp.Transform(), cmpopts.EquateEmpty(), sortProtos, protocmp.IgnoreFields(&gpb.Notification{}, "timestamp")); diff != "" {
+
+			// We don't rely on sortProtos to do the match, since (proto.Message).String() is not a stable
+			// format, and this results in flakes. ygot's testutil provides a gNMI-specific checker (but
+			// does not produce a diff, so we use cmp's to do that for us).
+			if !testutil.NotificationSetEqual(got, tc.want, testutil.IgnoreTimestamp{}) {
+				diff := cmp.Diff(tc.want, got, protocmp.Transform(), cmpopts.EquateEmpty(), sortProtos, protocmp.IgnoreFields(&gpb.Notification{}, "timestamp"))
 				t.Errorf("notificationsFromLabels(%v) returned an unexpected diff (-want +got): %v", tc.inLabels, diff)
 			}
 		})

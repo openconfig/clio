@@ -9,6 +9,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/dockerstatsreceiver v0.127.0
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/magna v0.0.0-20250326160904-26bd6759e94b
+	github.com/openconfig/ygot v0.31.0
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.37.0
 	go.opentelemetry.io/collector/component v1.33.0
@@ -98,7 +99,6 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/docker v0.127.0 // indirect
 	github.com/open-traffic-generator/snappi/gosnappi v1.31.0 // indirect
 	github.com/openconfig/goyang v1.6.2 // indirect
-	github.com/openconfig/ygot v0.31.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
