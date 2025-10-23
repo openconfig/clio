@@ -16,8 +16,10 @@ package gnmi
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 	ompb "go.opentelemetry.io/proto/otlp/metrics/v1"
@@ -35,6 +37,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// GNMI is a gNMI exporter.
 type GNMI struct {
 	cfg *Config
 
@@ -46,6 +49,7 @@ type GNMI struct {
 	logger *zap.Logger
 }
 
+// NewGNMIExporter creates a new gNMI exporter.
 func NewGNMIExporter(logger *zap.Logger, cfg *Config) (*GNMI, error) {
 	telemSrv, err := lwotgtelem.New(context.Background(), cfg.TargetName)
 	if err != nil {
@@ -74,6 +78,7 @@ func NewGNMIExporter(logger *zap.Logger, cfg *Config) (*GNMI, error) {
 	}, nil
 }
 
+// Start starts the gNMI exporter.
 func (g *GNMI) Start(_ context.Context, _ component.Host) error {
 	g.logger.Info("starting gNMI exporter", zap.String("addr", g.cfg.Addr),
 		zap.String("target", g.cfg.TargetName), zap.String("origin", g.cfg.Origin),
@@ -90,6 +95,7 @@ func (g *GNMI) Start(_ context.Context, _ component.Host) error {
 	return nil
 }
 
+// Stop stops the gNMI exporter.
 func (g *GNMI) Stop(_ context.Context) error {
 	close(g.metricCh)
 	g.srv.GracefulStop()
@@ -222,14 +228,34 @@ func typedValueFromNumericMetric(p simpleNumberDataPoint) *gpb.TypedValue {
 	}
 }
 
+// attrMap is convenience definition for a map of attribute names to values for use in gNMI
+// notifications.
+type attrMap map[string]string
+
+// convO2GMap converts an OpenTelemetry map to a gNMI map.
+func convO2GMap(attrs pcommon.Map) attrMap {
+	if attrs.Len() == 0 {
+		return nil
+	}
+
+	gMap := make(attrMap)
+	attrs.Range(func(k string, v pcommon.Value) bool {
+		gMap[k] = v.AsString()
+		return true
+	})
+	return gMap
+}
+
 // typedValuesFromMetric returns a list of typed values based on a metric's values.
-func (g *GNMI) typedValuesAndTimesFromMetric(m pmetric.Metric) ([]*gpb.TypedValue, []pcommon.Timestamp) {
+func (g *GNMI) typedValuesAndTimesFromMetric(m pmetric.Metric) ([]*gpb.TypedValue, []pcommon.Timestamp, []attrMap) {
 	var tvals []*gpb.TypedValue
 	var tstamps []pcommon.Timestamp
+	var attrs []attrMap
+
 	switch m.Type() {
 	case pmetric.MetricTypeEmpty:
 		g.logger.Error("empty metric type", zap.String("name", m.Name()))
-		return nil, nil
+		return nil, nil, nil
 	case pmetric.MetricTypeGauge:
 		gaugeMetrics := m.Gauge().DataPoints()
 		for l := 0; l < gaugeMetrics.Len(); l++ {
@@ -241,6 +267,7 @@ func (g *GNMI) typedValuesAndTimesFromMetric(m pmetric.Metric) ([]*gpb.TypedValu
 			}
 			tvals = append(tvals, val)
 			tstamps = append(tstamps, gaugeMetric.Timestamp())
+			attrs = append(attrs, convO2GMap(gaugeMetric.Attributes()))
 		}
 	case pmetric.MetricTypeSum:
 		sumMetrics := m.Sum().DataPoints()
@@ -253,6 +280,7 @@ func (g *GNMI) typedValuesAndTimesFromMetric(m pmetric.Metric) ([]*gpb.TypedValu
 			}
 			tvals = append(tvals, val)
 			tstamps = append(tstamps, sumMetric.Timestamp())
+			attrs = append(attrs, convO2GMap(sumMetric.Attributes()))
 		}
 	case pmetric.MetricTypeHistogram:
 		histMetrics := m.Histogram().DataPoints()
@@ -265,6 +293,7 @@ func (g *GNMI) typedValuesAndTimesFromMetric(m pmetric.Metric) ([]*gpb.TypedValu
 			}
 			tvals = append(tvals, val)
 			tstamps = append(tstamps, histMetric.Timestamp())
+			attrs = append(attrs, convO2GMap(histMetric.Attributes()))
 		}
 	case pmetric.MetricTypeExponentialHistogram:
 		histMetrics := m.ExponentialHistogram().DataPoints()
@@ -277,6 +306,7 @@ func (g *GNMI) typedValuesAndTimesFromMetric(m pmetric.Metric) ([]*gpb.TypedValu
 			}
 			tvals = append(tvals, val)
 			tstamps = append(tstamps, histMetric.Timestamp())
+			attrs = append(attrs, convO2GMap(histMetric.Attributes()))
 		}
 	case pmetric.MetricTypeSummary:
 		sumMetrics := m.Summary().DataPoints()
@@ -289,30 +319,41 @@ func (g *GNMI) typedValuesAndTimesFromMetric(m pmetric.Metric) ([]*gpb.TypedValu
 			}
 			tvals = append(tvals, val)
 			tstamps = append(tstamps, sumMetric.Timestamp())
+			attrs = append(attrs, convO2GMap(sumMetric.Attributes()))
 		}
 	default:
 		g.logger.Error("unsupported metric type", zap.String("name", m.Name()), zap.String("type", m.Type().String()))
 	}
-	return tvals, tstamps
+	return tvals, tstamps, attrs
 }
 
 // notificationsFromMetric returns a list of gNMI notifications based on a metric.
-func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
+func (g *GNMI) notificationsFromMetric(p pmetric.Metric, container string) []*gpb.Notification {
 	var notis []*gpb.Notification
-	values, timestamps := g.typedValuesAndTimesFromMetric(p)
+	values, timestamps, attrs := g.typedValuesAndTimesFromMetric(p)
 	if len(values) == 0 {
 		return nil
 	}
 
 	for i, val := range values {
+		// Some leaves are dependant on the attributes of the metric.
+		elems := g.toPathElems(p.Name())
+		if attrs[i] != nil {
+			elems[len(elems)-1].Key = attrs[i]
+		}
+
 		notis = append(notis, &gpb.Notification{
-			Timestamp: timestamps[i].AsTime().Unix(),
+			Timestamp: timestamps[i].AsTime().UnixNano(),
 			Prefix: &gpb.Path{
 				Origin: g.cfg.Origin,
 				Target: g.cfg.TargetName,
 				Elem: []*gpb.PathElem{
 					{
-						Name: g.cfg.TargetName,
+						Name: "containers",
+					},
+					{
+						Name: "container",
+						Key:  map[string]string{"name": container},
 					},
 				},
 			},
@@ -320,10 +361,58 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric) []*gpb.Notification {
 				{
 					Path: &gpb.Path{
 						Target: g.cfg.TargetName,
-						Origin: g.cfg.Origin,
-						Elem:   g.toPathElems(p.Name()),
+						Elem:   elems,
 					},
 					Val: val,
+				},
+			},
+		})
+	}
+	return notis
+}
+
+// notificationsFromLabels returns a list of gNMI notifications based on a map of labels. Given that
+// the labels are fetched from the same dockerstatereceiver.scrapev2 call as the other container
+// metrics, we can draft most notification fields --- e.g., timestamps and prefixes --- from a
+// reference notification.
+func (g *GNMI) notificationsFromLabels(m pcommon.Map, cname string) []*gpb.Notification {
+	var notis []*gpb.Notification
+
+	for k, v := range m.All() {
+		notis = append(notis, &gpb.Notification{
+			Timestamp: time.Now().UnixNano(),
+			Prefix: &gpb.Path{
+				Origin: g.cfg.Origin,
+				Target: g.cfg.TargetName,
+				Elem: []*gpb.PathElem{
+					{
+						Name: "containers",
+					},
+					{
+						Name: "container",
+						Key:  map[string]string{"name": cname},
+					},
+				},
+			},
+			Update: []*gpb.Update{
+				{
+					Path: &gpb.Path{
+						Target: g.cfg.TargetName,
+						Elem: []*gpb.PathElem{
+							{
+								Name: "labels",
+							},
+							{
+								Name: "label",
+								Key:  map[string]string{"name": k},
+							},
+						},
+					},
+					Val: &gpb.TypedValue{
+						Value: &gpb.TypedValue_StringVal{
+							StringVal: v.AsString(),
+						},
+					},
 				},
 			},
 		})
@@ -343,6 +432,16 @@ func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target stri
 			rms := ms.ResourceMetrics()
 			for i := 0; i < rms.Len(); i++ {
 				rm := rms.At(i)
+				cname := ""
+
+				// Extract container name from resource, if not found, log error and continue.
+				cNameVal, ok := rm.Resource().Attributes().Get("container.name")
+				if ok && cNameVal.Type() == pcommon.ValueTypeStr {
+					cname = cNameVal.Str()
+				} else {
+					g.logger.Error("resource is not associated with a container name formatted as a string", zap.String("resource", fmt.Sprintf("%+v", rm.Resource().Attributes().AsRaw())))
+					continue
+				}
 
 				// Iterate over all instrument scopes within the resource (e.g., module within an app).
 				ilms := rm.ScopeMetrics()
@@ -353,8 +452,14 @@ func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target stri
 					ms := ilm.Metrics()
 					for k := 0; k < ms.Len(); k++ {
 						m := ms.At(k)
-						notis = append(notis, g.notificationsFromMetric(m)...)
+						notis = append(notis, g.notificationsFromMetric(m, cname)...)
 					}
+				}
+
+				// Obtain notifications for labels.
+				lmap, ok := rm.Resource().Attributes().Get("container.labels")
+				if ok && lmap.Type() == pcommon.ValueTypeMap && len(notis) > 0 {
+					notis = append(notis, g.notificationsFromLabels(lmap.Map(), cname)...)
 				}
 			}
 
@@ -371,7 +476,10 @@ func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target stri
 
 func (g *GNMI) toPathElems(name string) []*gpb.PathElem {
 	var elems []*gpb.PathElem
-	for _, p := range strings.Split(name, g.cfg.Sep) {
+	for i, p := range strings.Split(name, g.cfg.Sep) {
+		if i == 0 && p == "container" {
+			continue
+		}
 		elems = append(elems, &gpb.PathElem{
 			Name: p,
 			// TODO (alshabib): support keyed paths.

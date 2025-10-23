@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/openconfig/clio/gnmipath/internal/metadata"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/processor/processortest"
@@ -39,9 +40,9 @@ func TestCreateProcessor(t *testing.T) {
 	factory := NewFactory()
 
 	cfg := factory.CreateDefaultConfig()
-	creationSet := processortest.NewNopCreateSettings()
+	creationSet := processortest.NewNopSettings(metadata.Type)
 
-	mp, err := factory.CreateMetricsProcessor(context.Background(), creationSet, cfg, consumertest.NewNop())
+	mp, err := factory.CreateMetrics(context.Background(), creationSet, cfg, consumertest.NewNop())
 	if mp == nil {
 		t.Error("nil metrics processor")
 	}

@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Run docker build from root of clio.
 RUN mkdir -p /go/src/github.com/clio/magna

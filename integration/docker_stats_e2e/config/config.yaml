@@ -3,9 +3,13 @@ receivers:
     # Note: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/receiver/dockerstatsreceiver/README.md
     collection_interval: 2s
     initial_delay: 1s
+    container_labels_to_resource_attributes:
+      - match_type: regexp
+        include: ".*"
+    resource_attributes:
+      container.labels:
+        enabled: true
     metrics:
-      # State
-      
       # Uptime
       container.uptime:
         enabled: true
@@ -151,6 +155,8 @@ processors:
 
 exporters:
   gnmi:
+    target_name: "poodle"
+    origin: "shiba"
 
 service:
   pipelines:

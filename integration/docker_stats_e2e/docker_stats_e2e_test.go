@@ -8,16 +8,49 @@ import (
 	"testing"
 	"time"
 
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
-
 	"github.com/openconfig/clio/collector"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/confmap/provider/fileprovider"
 	"go.opentelemetry.io/collector/otelcol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	gpb "github.com/openconfig/gnmi/proto/gnmi"
 )
+
+const (
+	testTarget = "poodle"
+	testOrigin = "shiba"
+)
+
+func spawnNginxContainer(t *testing.T) (ctr testcontainers.Container, cleanup func()) {
+	t.Helper()
+	req := testcontainers.ContainerRequest{
+		Image:        "docker.io/library/nginx:1.17",
+		ExposedPorts: []string{"80/tcp"},
+		Labels:       map[string]string{"app": "nginx", "version": "1.17"},
+		WaitingFor:   wait.ForExposedPort(),
+	}
+
+	container, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
+		ContainerRequest: req,
+		Started:          true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create nginx container for test: %v", err)
+	}
+
+	f := func() {
+		if err := testcontainers.TerminateContainer(ctr); err != nil {
+			t.Errorf("failed to terminate container: %s", err)
+		}
+	}
+
+	return container, f
+}
 
 // configProviderSettings is a convenience function to create ConfigProviderSettings that use the
 // local config.yaml.
@@ -39,11 +72,7 @@ func subscribeRequestForTarget(t *testing.T, target string) *gpb.SubscribeReques
 			Subscribe: &gpb.SubscriptionList{
 				Prefix: &gpb.Path{
 					Target: target,
-					Elem: []*gpb.PathElem{
-						{
-							Name: target,
-						},
-					},
+					Origin: testOrigin,
 				},
 				Mode: gpb.SubscriptionList_STREAM,
 				Subscription: []*gpb.Subscription{
@@ -59,7 +88,7 @@ func subscribeRequestForTarget(t *testing.T, target string) *gpb.SubscribeReques
 }
 
 // startCollectorPipeline starts and returns the collector pipeline (plus the WaitGroup it runs in).
-func startCollectorPipeline(t *testing.T, ctx context.Context) (*sync.WaitGroup, *otelcol.Collector) {
+func startCollectorPipeline(ctx context.Context, t *testing.T) (*sync.WaitGroup, *otelcol.Collector) {
 	t.Helper()
 	t.Log("Starting collector pipeline")
 
@@ -104,7 +133,7 @@ func validateNotifications(t *testing.T, gotNoti []*gpb.Notification) {
 	t.Helper()
 
 	elems2path := func(elems []*gpb.PathElem) string {
-		subs := []string{}
+		var subs []string
 		for _, e := range elems {
 			subs = append(subs, e.GetName())
 		}
@@ -129,6 +158,8 @@ func validateNotifications(t *testing.T, gotNoti []*gpb.Notification) {
 		"container.network.io.usage.rx_bytes":   true,
 		"container.network.io.usage.rx_dropped": true,
 		"container.network.io.usage.tx_bytes":   true,
+		"labels.app":                            true,
+		"labels.version":                        true,
 	}
 
 	for _, n := range gotNoti {
@@ -147,6 +178,8 @@ func validateNotifications(t *testing.T, gotNoti []*gpb.Notification) {
 }
 
 func TestE2E(t *testing.T) {
+	_, cleanup := spawnNginxContainer(t)
+	defer cleanup()
 
 	gOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -159,7 +192,7 @@ func TestE2E(t *testing.T) {
 	defer sinkWg.Wait()
 
 	// Start collector pipeline & schedule stop.
-	cwg, col := startCollectorPipeline(t, ctx)
+	cwg, col := startCollectorPipeline(ctx, t)
 	defer stopCollectorPipeline(t, cwg, col)
 
 	// Wait for collector to be started.
@@ -198,14 +231,14 @@ func TestE2E(t *testing.T) {
 		}
 	}()
 
-	sreq := subscribeRequestForTarget(t, "poodle")
+	sreq := subscribeRequestForTarget(t, testTarget)
 	err = stream.Send(sreq)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 
 	// Give collector some time to process the notifications.
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	validateNotifications(t, gotNoti)
 }
