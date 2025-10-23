@@ -41,8 +41,8 @@ func createDefaultConfig() component.Config {
 	}
 }
 
-func createMetrics(ctx context.Context, set processor.CreateSettings, cfg component.Config, nextConsumer consumer.Metrics) (processor.Metrics, error) {
+func createMetrics(ctx context.Context, set processor.Settings, cfg component.Config, nextConsumer consumer.Metrics) (processor.Metrics, error) {
 	p := NewPather(cfg.(*Config))
-	return processorhelper.NewMetricsProcessor(ctx, set, cfg, nextConsumer,
+	return processorhelper.NewMetrics(ctx, set, cfg, nextConsumer,
 		p.processMetrics, processorhelper.WithCapabilities(processorCapabilities))
 }

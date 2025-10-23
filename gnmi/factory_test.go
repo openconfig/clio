@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/openconfig/clio/gnmi/internal/metadata"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/exporter/exportertest"
 )
@@ -38,9 +39,9 @@ func TestCreateExporter(t *testing.T) {
 	factory := NewFactory()
 
 	cfg := factory.CreateDefaultConfig()
-	creationSet := exportertest.NewNopCreateSettings()
+	creationSet := exportertest.NewNopSettings(metadata.Type)
 
-	mp, err := factory.CreateMetricsExporter(context.Background(), creationSet, cfg)
+	mp, err := factory.CreateMetrics(context.Background(), creationSet, cfg)
 	if mp == nil {
 		t.Error("nil metrics exporter")
 	}
