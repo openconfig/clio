@@ -40,12 +40,12 @@ func createDefaultConfig() component.Config {
 	}
 }
 
-func createMetricsExporter(ctx context.Context, set exporter.CreateSettings, cfg component.Config) (exporter.Metrics, error) {
+func createMetricsExporter(ctx context.Context, set exporter.Settings, cfg component.Config) (exporter.Metrics, error) {
 	g, err := NewGNMIExporter(set.Logger, cfg.(*Config))
 	if err != nil {
 		return nil, err
 	}
-	return exporterhelper.NewMetricsExporter(ctx, set, cfg,
+	return exporterhelper.NewMetrics(ctx, set, cfg,
 		g.storeMetric,
 		exporterhelper.WithStart(g.Start),
 		exporterhelper.WithShutdown(g.Stop),

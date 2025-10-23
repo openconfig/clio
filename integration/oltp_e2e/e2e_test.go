@@ -40,7 +40,11 @@ func subscribeRequestForTarget(t *testing.T, target string) *gpb.SubscribeReques
 					Target: target,
 					Elem: []*gpb.PathElem{
 						{
-							Name: "test-container",
+							Name: "containers",
+						},
+						{
+							Name: "container",
+							Key:  map[string]string{"name": "test-container"},
 						},
 					},
 					Origin: "clio",
