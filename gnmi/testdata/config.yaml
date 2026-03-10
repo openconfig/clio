@@ -1,4 +1,5 @@
 addr: localhost:10
 sep: "/"
+attr_sep: "."
 target_name: "target"
 buffer_size: 10

@@ -47,6 +47,9 @@ type Config struct {
 	// Sep is the separator used in the metric name.
 	Sep string `mapstructure:"sep"`
 
+	// AttrSep is the separator used to decode gNMI PathElem Key-Value Maps from metric attributes.
+	AttrSep string `mapstructure:"attr_sep"`
+
 	// Origin is set as the origin of gNMI notifications.
 	Origin string `mapstructure:"origin"`
 }

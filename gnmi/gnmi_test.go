@@ -400,6 +400,7 @@ func TestNotificationsFromMetric(t *testing.T) {
 	tests := []struct {
 		name     string
 		inMetric pmetric.Metric
+		attrSep  string
 		want     []*gpb.Notification
 	}{
 		{
@@ -719,6 +720,54 @@ func TestNotificationsFromMetric(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:     "gauge-with-keyed-attributes",
+			inMetric: attredGaugeMetric,
+			attrSep:  ".",
+			want: []*gpb.Notification{
+				{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Elem: []*gpb.PathElem{
+									{Name: "gauge"},
+									{
+										Name: "int_and_double",
+										Key:  map[string]string{"the-key": "the-value"},
+									},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_IntVal{
+									IntVal: 123,
+								},
+							},
+						},
+					},
+				},
+				{
+					Prefix: testPrefix,
+					Update: []*gpb.Update{
+						{
+							Path: &gpb.Path{
+								Target: "test-target",
+								Elem: []*gpb.PathElem{
+									{Name: "gauge"},
+									{Name: "int_and_double"},
+								},
+							},
+							Val: &gpb.TypedValue{
+								Value: &gpb.TypedValue_DoubleVal{
+									DoubleVal: 456.0,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -728,6 +777,7 @@ func TestNotificationsFromMetric(t *testing.T) {
 				cfg: &Config{
 					TargetName: "test-target",
 					Sep:        "/",
+					AttrSep:    tc.attrSep,
 					Origin:     "test-origin",
 				},
 			}
@@ -856,4 +906,131 @@ func TestNotificationsFromLabels(t *testing.T) {
 		})
 	}
 
+}
+
+func TestToPathElems(t *testing.T) {
+	tests := []struct {
+		name        string
+		counterName string
+		attrs       attrMap
+		attrSep     string
+		want        []*gpb.PathElem
+	}{
+		{
+			name:        "no-metric-attributes",
+			counterName: "interfaces/interface/state/name",
+			attrs:       nil,
+			want: []*gpb.PathElem{
+				{Name: "interfaces"},
+				{Name: "interface"},
+				{Name: "state"},
+				{Name: "name"},
+			},
+		},
+		{
+			name:        "no-attrSep-falls-back-to-last-element",
+			counterName: "interfaces/interface/state/name",
+			attrs:       attrMap{"foo": "bar"},
+			attrSep:     "",
+			want: []*gpb.PathElem{
+				{Name: "interfaces"},
+				{Name: "interface"},
+				{Name: "state"},
+				{Name: "name", Key: map[string]string{"foo": "bar"}},
+			},
+		},
+		{
+			name:        "no-dot-in-attribute-falls-back-to-last-element",
+			counterName: "interfaces/interface/state/name",
+			attrs:       attrMap{"foo": "bar"},
+			attrSep:     ".",
+			want: []*gpb.PathElem{
+				{Name: "interfaces"},
+				{Name: "interface"},
+				{Name: "state"},
+				{Name: "name", Key: map[string]string{"foo": "bar"}},
+			},
+		},
+		{
+			name:        "matching-attribute-gets-keyed",
+			counterName: "interfaces/interface/state/name",
+			attrs:       attrMap{"interface.name": "eth0"},
+			attrSep:     ".",
+			want: []*gpb.PathElem{
+				{Name: "interfaces"},
+				{Name: "interface", Key: map[string]string{"name": "eth0"}},
+				{Name: "state"},
+				{Name: "name"},
+			},
+		},
+		{
+			name:        "multiple-matching-attributes-and-multiple-elements",
+			counterName: "interfaces/interface/afisafis/afisafi/state/name",
+			attrs:       attrMap{"interface.name": "eth0", "afisafi.name": "ipv4", "other.foo": "bar", "baz": "qux"},
+			attrSep:     ".",
+			want: []*gpb.PathElem{
+				{Name: "interfaces"},
+				{Name: "interface", Key: map[string]string{"name": "eth0"}},
+				{Name: "afisafis"},
+				{Name: "afisafi", Key: map[string]string{"name": "ipv4"}},
+				{Name: "state"},
+				{Name: "name", Key: map[string]string{"other.foo": "bar", "baz": "qux"}},
+			},
+		},
+		{
+			name:        "duplicate-names-match-all-occurrence",
+			counterName: "interfaces/interface/subinterfaces/interface/state/name",
+			attrs:       attrMap{"interface.index": "1"},
+			attrSep:     ".",
+			want: []*gpb.PathElem{
+				{Name: "interfaces"},
+				{Name: "interface", Key: map[string]string{"index": "1"}},
+				{Name: "subinterfaces"},
+				{Name: "interface", Key: map[string]string{"index": "1"}},
+				{Name: "state"},
+				{Name: "name"},
+			},
+		},
+		{
+			name:        "container-prefix-is-dropped-but-element-matching-works",
+			counterName: "container/interfaces/interface/state/name",
+			attrs:       attrMap{"interface.name": "eth0"},
+			attrSep:     ".",
+			want: []*gpb.PathElem{
+				{Name: "interfaces"},
+				{Name: "interface", Key: map[string]string{"name": "eth0"}},
+				{Name: "state"},
+				{Name: "name"},
+			},
+		},
+		{
+			name:        "container-prefix-is-dropped-despite-potential-assignment",
+			counterName: "container/interfaces/interface/subinterfaces/interface/state/name",
+			attrs:       attrMap{"container.name": "c1", "interface.index": "1"},
+			attrSep:     ".",
+			want: []*gpb.PathElem{
+				{Name: "interfaces"},
+				{Name: "interface", Key: map[string]string{"index": "1"}},
+				{Name: "subinterfaces"},
+				{Name: "interface", Key: map[string]string{"index": "1"}},
+				{Name: "state"},
+				{Name: "name", Key: map[string]string{"container.name": "c1"}},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &GNMI{
+				cfg: &Config{
+					Sep:     "/",
+					AttrSep: tc.attrSep,
+				},
+			}
+			got := g.toPathElems(tc.counterName, tc.attrs)
+			if diff := cmp.Diff(tc.want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("toPathElems(%q, %v) with AttrSep=%q returned diff (-want +got):\n%s", tc.name, tc.attrs, tc.attrSep, diff)
+			}
+		})
+	}
 }

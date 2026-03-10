@@ -337,10 +337,7 @@ func (g *GNMI) notificationsFromMetric(p pmetric.Metric, container string) []*gp
 
 	for i, val := range values {
 		// Some leaves are dependant on the attributes of the metric.
-		elems := g.toPathElems(p.Name())
-		if attrs[i] != nil {
-			elems[len(elems)-1].Key = attrs[i]
-		}
+		elems := g.toPathElems(p.Name(), attrs[i])
 
 		notis = append(notis, &gpb.Notification{
 			Timestamp: timestamps[i].AsTime().UnixNano(),
@@ -474,7 +471,7 @@ func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target stri
 	return nil
 }
 
-func (g *GNMI) toPathElems(name string) []*gpb.PathElem {
+func (g *GNMI) toPathElems(name string, attrs attrMap) []*gpb.PathElem {
 	var elems []*gpb.PathElem
 	for i, p := range strings.Split(name, g.cfg.Sep) {
 		if i == 0 && p == "container" {
@@ -482,8 +479,44 @@ func (g *GNMI) toPathElems(name string) []*gpb.PathElem {
 		}
 		elems = append(elems, &gpb.PathElem{
 			Name: p,
-			// TODO (alshabib): support keyed paths.
 		})
 	}
+
+	// If there are no attributes or elements, return the elements as is.
+	if len(attrs) == 0 || len(elems) == 0 {
+		return elems
+	}
+
+	// Maintain compatibility with older versions of Clio.
+	if g.cfg.AttrSep == "" {
+		elems[len(elems)-1].Key = attrs
+		return elems
+	}
+
+	for k, v := range attrs {
+		parts := strings.SplitN(k, g.cfg.AttrSep, 2)
+		matched := false
+		if len(parts) == 2 {
+			for _, elem := range elems {
+				if elem.Name == parts[0] {
+					if elem.Key == nil {
+						elem.Key = make(map[string]string)
+					}
+					elem.Key[parts[1]] = v
+					matched = true
+				}
+			}
+		}
+		// If no match is found, add the attribute to the last element to maintain compatibility with
+		// older versions of Clio.
+		if !matched {
+			lastElem := elems[len(elems)-1]
+			if lastElem.Key == nil {
+				lastElem.Key = make(map[string]string)
+			}
+			lastElem.Key[k] = v
+		}
+	}
+
 	return elems
 }
