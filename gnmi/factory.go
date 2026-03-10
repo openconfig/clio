@@ -37,6 +37,7 @@ func createDefaultConfig() component.Config {
 		TargetName: "poodle",
 		BufferSize: 1000,
 		Sep:        "/",
+		AttrSep:    "",
 	}
 }
 

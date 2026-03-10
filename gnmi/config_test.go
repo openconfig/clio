@@ -48,6 +48,7 @@ func TestUnmarshalConfig(t *testing.T) {
 	want := &Config{
 		Addr:       "localhost:10",
 		Sep:        "/",
+		AttrSep:    ".",
 		TargetName: "target",
 		BufferSize: 10,
 	}
