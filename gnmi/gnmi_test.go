@@ -16,22 +16,20 @@ package gnmi
 
 import (
 	"context"
-	"sync"
-	"testing"
-	"time"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/openconfig/ygot/testutil"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	ompb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
-
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/openconfig/ygot/testutil"
-	ompb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	anypb "google.golang.org/protobuf/types/known/anypb"
+	"sync"
+	"testing"
+	"time"
 )
 
 var (
@@ -1030,6 +1028,156 @@ func TestToPathElems(t *testing.T) {
 			got := g.toPathElems(tc.counterName, tc.attrs)
 			if diff := cmp.Diff(tc.want, got, protocmp.Transform()); diff != "" {
 				t.Errorf("toPathElems(%q, %v) with AttrSep=%q returned diff (-want +got):\n%s", tc.name, tc.attrs, tc.attrSep, diff)
+			}
+		})
+	}
+}
+
+func getContainerName(path *gpb.Path) string {
+	for _, elem := range path.Elem {
+		if elem.Name == "container" {
+			return elem.Key["name"]
+		}
+	}
+	return ""
+}
+
+func TestHandleMetricsTTL(t *testing.T) {
+	type scenarioStep struct {
+		containerName string
+		waitDuration  time.Duration
+		injectMetric  bool
+	}
+
+	tests := []struct {
+		name         string
+		containerTTL time.Duration
+		steps        []scenarioStep
+		wantDeletes  map[string]bool // container name -> expected delete notification
+	}{
+		{
+			name:         "metric-purged",
+			containerTTL: 100 * time.Millisecond,
+			steps: []scenarioStep{
+				// waitDuration > containerTTL, so expect delete notification.
+				{containerName: "test-container", injectMetric: true, waitDuration: 300 * time.Millisecond},
+			},
+			wantDeletes: map[string]bool{"test-container": true},
+		},
+		{
+			name:         "metric-survives-if-ttl-not-exceeded",
+			containerTTL: 500 * time.Millisecond,
+			steps: []scenarioStep{
+				{containerName: "test-container", injectMetric: true, waitDuration: 50 * time.Millisecond},
+			},
+			wantDeletes: map[string]bool{"test-container": false},
+		},
+		{
+			name:         "metric-survives-with-refresh",
+			containerTTL: 300 * time.Millisecond,
+			steps: []scenarioStep{
+				{containerName: "test-container", injectMetric: true, waitDuration: 200 * time.Millisecond},
+				{containerName: "test-container", injectMetric: true, waitDuration: 200 * time.Millisecond},
+			},
+			wantDeletes: map[string]bool{"test-container": false},
+		},
+		{
+			name:         "metric-no-purge-if-zero-ttl",
+			containerTTL: 0,
+			steps: []scenarioStep{
+				{containerName: "test-container", injectMetric: true, waitDuration: 500 * time.Millisecond},
+			},
+			wantDeletes: map[string]bool{"test-container": false},
+		},
+		{
+			name:         "multiple-containers-mixed-purge",
+			containerTTL: 200 * time.Millisecond,
+			steps: []scenarioStep{
+				{containerName: "container-1", injectMetric: true},
+				{containerName: "container-2", injectMetric: true},
+				{waitDuration: 300 * time.Millisecond}, // container-1 and container-2 should expire
+				{containerName: "container-3", injectMetric: true, waitDuration: 50 * time.Millisecond},
+			},
+			wantDeletes: map[string]bool{
+				"container-1": true,
+				"container-2": true,
+				"container-3": false,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &GNMI{
+				logger: zap.NewExample(),
+				cfg: &Config{
+					TargetName:   "test-target",
+					Sep:          "/",
+					ContainerTTL: tc.containerTTL,
+				},
+				metricCh: make(chan *pmetric.Metrics, 10),
+			}
+
+			var notifs []*gpb.Notification
+			var nMu sync.Mutex
+			updateFn := func(n *gpb.Notification) error {
+				nMu.Lock()
+				defer nMu.Unlock()
+				notifs = append(notifs, n)
+				return nil
+			}
+
+			// Start handleMetrics
+			g.handleMetrics(nil, updateFn, "", nil)
+
+			// Mock the metrics with the interval
+			for _, step := range tc.steps {
+				if step.injectMetric {
+					md := GenerateMetrics(1, pmetric.MetricTypeGauge, map[string]string{"container.name": step.containerName})
+					md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).SetName("container/uptime")
+					if err := g.storeMetric(context.Background(), md); err != nil {
+						t.Errorf("storeMetric returned error: %v", err)
+					}
+				}
+				if step.waitDuration > 0 {
+					time.Sleep(step.waitDuration)
+				}
+			}
+
+			close(g.metricCh)
+
+			nMu.Lock()
+			defer nMu.Unlock()
+
+			deletedContainers := make(map[string]bool)
+			for _, n := range notifs {
+				if len(n.Delete) > 0 {
+					cname := getContainerName(n.Prefix)
+					if cname != "" {
+						deletedContainers[cname] = true
+					}
+
+					// Verify prefix and delete element
+					expectedPrefix := &gpb.Path{
+						Target: "test-target",
+						Elem: []*gpb.PathElem{
+							{Name: "containers"},
+							{Name: "container", Key: map[string]string{"name": cname}},
+						},
+					}
+					if diff := cmp.Diff(n.Prefix, expectedPrefix, protocmp.Transform()); diff != "" {
+						t.Errorf("delete prefix mismatch for container %q (-want +got):\n%s", cname, diff)
+					}
+					if len(n.Delete[0].Elem) != 0 {
+						t.Errorf("expected empty path element in delete for container %q, got %v", cname, n.Delete[0].Elem)
+					}
+				}
+			}
+
+			for cname, wantDelete := range tc.wantDeletes {
+				if deletedContainers[cname] != wantDelete {
+					t.Errorf("expected delete notification for container %q: %v, but got: %v", cname, wantDelete, deletedContainers[cname])
+				}
 			}
 		})
 	}

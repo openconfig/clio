@@ -15,13 +15,13 @@
 package gnmi
 
 import (
-	"path/filepath"
-	"testing"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/confmap/confmaptest"
+	"path/filepath"
+	"testing"
+	"time"
 )
 
 func TestUnmarshalDefaultConfig(t *testing.T) {
@@ -46,11 +46,12 @@ func TestUnmarshalConfig(t *testing.T) {
 	}
 
 	want := &Config{
-		Addr:       "localhost:10",
-		Sep:        "/",
-		AttrSep:    ".",
-		TargetName: "target",
-		BufferSize: 10,
+		Addr:         "localhost:10",
+		Sep:          "/",
+		AttrSep:      ".",
+		TargetName:   "target",
+		BufferSize:   10,
+		ContainerTTL: 20 * time.Second,
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("UnmarshalConfig() returned diff (-got, +want):\n%s", diff)

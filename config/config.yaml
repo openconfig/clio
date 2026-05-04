@@ -154,6 +154,7 @@ processors:
 exporters:
   # NOTE: Prior to v0.86.0 use `logging` instead of `debug`.
   gnmi:
+    container_ttl: 20s
     addr: "0.0.0.0:60302"
     # To enable transport security (e.g., mTLS), set the following:
     # tp_sec: "mtls"
