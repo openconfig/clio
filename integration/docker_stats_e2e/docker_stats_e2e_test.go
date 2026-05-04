@@ -260,8 +260,7 @@ func TestE2ETTL(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	var gotNoti []*gpb.Notification
-	var notiMu sync.Mutex
+	notiCh := make(chan *gpb.Notification, 100)
 	sinkWg := &sync.WaitGroup{}
 	defer sinkWg.Wait()
 
@@ -296,9 +295,7 @@ func TestE2ETTL(t *testing.T) {
 				return
 			}
 			if resp.GetUpdate() != nil {
-				notiMu.Lock()
-				gotNoti = append(gotNoti, resp.GetUpdate())
-				notiMu.Unlock()
+				notiCh <- resp.GetUpdate()
 			}
 		}
 	}()
@@ -318,24 +315,16 @@ func TestE2ETTL(t *testing.T) {
 
 	// Wait for at least one update for the container to ensure it's registered.
 	updateFound := false
-	for i := 0; i < 50; i++ {
-		notiMu.Lock()
-		for _, n := range gotNoti {
-			if len(n.Update) > 0 {
-				if strings.TrimPrefix(getContainerName(n.Prefix), "/") == trimmedName {
-					updateFound = true
-					break
-				}
+	timeout := time.After(10 * time.Second)
+	for !updateFound {
+		select {
+		case n := <-notiCh:
+			if len(n.GetUpdate()) > 0 && strings.TrimPrefix(getContainerName(n.GetPrefix()), "/") == trimmedName {
+				updateFound = true
 			}
+		case <-timeout:
+			t.Fatalf("Timed out waiting for initial update for container %s", trimmedName)
 		}
-		notiMu.Unlock()
-		if updateFound {
-			break
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-	if !updateFound {
-		t.Fatalf("Timed out waiting for initial update for container %s", trimmedName)
 	}
 
 	// 2. Kill the container to trigger the death condition
@@ -343,34 +332,26 @@ func TestE2ETTL(t *testing.T) {
 
 	// 3. Wait for the TTL (config is set to 4s) to expire + sweeper ticker to pick it up.
 	deleteFound := false
-
-	for i := 0; i < 75; i++ {
-		notiMu.Lock()
-		for _, n := range gotNoti {
-			if len(n.Delete) > 0 {
-				if n.Prefix.GetTarget() != testTarget {
+	timeout = time.After(15 * time.Second)
+	for !deleteFound {
+		select {
+		case n := <-notiCh:
+			if len(n.GetDelete()) > 0 {
+				if n.GetPrefix().GetTarget() != testTarget {
 					continue
 				}
-				if n.Prefix.GetOrigin() != testOrigin {
+				if n.GetPrefix().GetOrigin() != testOrigin {
 					continue
 				}
 
-				// Verify the container name is in the delete path
-				gotName := getContainerName(n.Delete[0])
+				gotName := getContainerName(n.GetDelete()[0])
 				if strings.TrimPrefix(gotName, "/") == trimmedName {
 					deleteFound = true
-					break
 				}
 			}
+		case <-timeout:
+			t.Errorf("Expected a container delete notification from the integration pipeline after killing container %v, but none was sent", containerName)
+			return
 		}
-		if deleteFound {
-			break
-		}
-		notiMu.Unlock()
-		time.Sleep(200 * time.Millisecond)
-	}
-
-	if !deleteFound {
-		t.Errorf("Expected a container delete notification from the integration pipeline after killing container %v, but none was sent", containerName)
 	}
 }
