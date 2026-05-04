@@ -1165,10 +1165,10 @@ func TestHandleMetricsTTL(t *testing.T) {
 							{Name: "container", Key: map[string]string{"name": cname}},
 						},
 					}
-					if diff := cmp.Diff(n.Prefix, expectedPrefix, protocmp.Transform()); diff != "" {
+					if diff := cmp.Diff(n.GetPrefix(), expectedPrefix, protocmp.Transform()); diff != "" {
 						t.Errorf("delete prefix mismatch for container %q (-want +got):\n%s", cname, diff)
 					}
-					if len(n.Delete[0].Elem) != 0 {
+					if len(n.GetDelete()[0].GetElem()) != 0 {
 						t.Errorf("expected empty path element in delete for container %q, got %v", cname, n.Delete[0].Elem)
 					}
 				}
