@@ -55,7 +55,7 @@ type Config struct {
 	Origin string `mapstructure:"origin"`
 
 	// ContainerTTL is the time after which a container with no new docker_stats metrics is considered dead and purged.
-	// This should be set to a value greater than the docker_stats collection interval. 
+	// This should be set to a value greater than the docker_stats collection interval.
 	// If set to 0, no delete notifications will be sent.
 	ContainerTTL time.Duration `mapstructure:"container_ttl"`
 }

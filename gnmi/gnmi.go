@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/proto"
-	anypb "google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/anypb"
 	"k8s.io/klog/v2"
 	"net"
 	"strings"
@@ -438,7 +438,6 @@ func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target stri
 				}
 				g.processMetrics(ms, updateFn, lastSeen)
 			case now := <-tickerCh:
-				// continue
 				g.sweepStaleContainers(now, updateFn, lastSeen)
 			}
 		}

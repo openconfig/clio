@@ -162,7 +162,7 @@ func validateNotifications(t *testing.T, gotNoti []*gpb.Notification) {
 		if len(n.GetDelete()) > 0 {
 			t.Errorf("Unexpected delete notification received: %v", n)
 		}
-		
+
 		for _, u := range n.GetUpdate() {
 			path := elems2path(u.GetPath().GetElem())
 			delete(wantPathSet, path)
