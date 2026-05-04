@@ -246,7 +246,7 @@ func TestE2E(t *testing.T) {
 func getContainerName(path *gpb.Path) string {
 	for _, elem := range path.Elem {
 		if elem.Name == "container" {
-			return elem.Key["name"]
+			return strings.TrimPrefix(elem.Key["name"], "/")
 		}
 	}
 	return ""
@@ -319,7 +319,7 @@ func TestE2ETTL(t *testing.T) {
 	for !updateFound {
 		select {
 		case n := <-notiCh:
-			if len(n.GetUpdate()) > 0 && strings.TrimPrefix(getContainerName(n.GetPrefix()), "/") == trimmedName {
+			if len(n.GetUpdate()) > 0 && getContainerName(n.GetPrefix()) == trimmedName {
 				updateFound = true
 			}
 		case <-timeout:
@@ -337,15 +337,11 @@ func TestE2ETTL(t *testing.T) {
 		select {
 		case n := <-notiCh:
 			if len(n.GetDelete()) > 0 {
-				if n.GetPrefix().GetTarget() != testTarget {
+				if n.GetPrefix().GetTarget() != testTarget || n.GetPrefix().GetOrigin() != testOrigin {
 					continue
 				}
-				if n.GetPrefix().GetOrigin() != testOrigin {
-					continue
-				}
-
 				gotName := getContainerName(n.GetDelete()[0])
-				if strings.TrimPrefix(gotName, "/") == trimmedName {
+				if gotName == trimmedName {
 					deleteFound = true
 				}
 			}
