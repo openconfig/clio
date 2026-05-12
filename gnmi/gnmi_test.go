@@ -1033,7 +1033,7 @@ func TestToPathElems(t *testing.T) {
 	}
 }
 
-func getContainerName(path *gpb.Path) string {
+func containerNameFromPath(path *gpb.Path) string {
 	for _, elem := range path.Elem {
 		if elem.Name == "container" {
 			return elem.Key["name"]
@@ -1152,7 +1152,7 @@ func TestHandleMetricsTTL(t *testing.T) {
 			deletedContainers := make(map[string]bool)
 			for _, n := range notifs {
 				if len(n.Delete) > 0 {
-					cname := getContainerName(n.Prefix)
+					cname := containerNameFromPath(n.Prefix)
 					if cname != "" {
 						deletedContainers[cname] = true
 					}

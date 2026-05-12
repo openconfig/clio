@@ -243,7 +243,7 @@ func TestE2E(t *testing.T) {
 	validateNotifications(t, gotNoti)
 }
 
-func getContainerName(path *gpb.Path) string {
+func containerNameFromPath(path *gpb.Path) string {
 	for _, elem := range path.Elem {
 		if elem.Name == "container" {
 			return strings.TrimPrefix(elem.Key["name"], "/")
@@ -319,7 +319,7 @@ func TestE2ETTL(t *testing.T) {
 	for !updateFound {
 		select {
 		case n := <-notiCh:
-			if len(n.GetUpdate()) > 0 && getContainerName(n.GetPrefix()) == trimmedName {
+			if len(n.GetUpdate()) > 0 && containerNameFromPath(n.GetPrefix()) == trimmedName {
 				updateFound = true
 			}
 		case <-timeout:
@@ -340,7 +340,7 @@ func TestE2ETTL(t *testing.T) {
 				if n.GetPrefix().GetTarget() != testTarget || n.GetPrefix().GetOrigin() != testOrigin {
 					continue
 				}
-				gotName := getContainerName(n.GetDelete()[0])
+				gotName := containerNameFromPath(n.GetDelete()[0])
 				if gotName == trimmedName {
 					deleteFound = true
 				}
