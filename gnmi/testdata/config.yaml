@@ -1,5 +1,6 @@
 addr: localhost:10
 sep: "/"
 attr_sep: "."
+container_ttl: 20s
 target_name: "target"
 buffer_size: 10

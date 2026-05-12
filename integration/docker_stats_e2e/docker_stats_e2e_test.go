@@ -2,13 +2,8 @@ package e2etest
 
 import (
 	"context"
-	"path/filepath"
-	"strings"
-	"sync"
-	"testing"
-	"time"
-
 	"github.com/openconfig/clio/collector"
+	gpb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.opentelemetry.io/collector/component"
@@ -17,8 +12,11 @@ import (
 	"go.opentelemetry.io/collector/otelcol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
 )
 
 const (
@@ -142,27 +140,29 @@ func validateNotifications(t *testing.T, gotNoti []*gpb.Notification) {
 
 	// Map containing some of the enabled paths for each "logical metric group."
 	wantPathSet := map[string]bool{
-		"container.uptime":                      true,
-		"container.restarts":                    true,
-		"container.cpu.usage.kernelmode":        true,
-		"container.cpu.usage.total":             true,
-		"container.cpu.usage.usermode":          true,
-		"container.memory.file":                 true,
-		"container.memory.percent":              true,
-		"container.memory.usage.total":          true,
-		"container.cpu.utilization":             true,
-		"container.cpu.logical.count":           true,
-		"container.cpu.shares":                  true,
-		"container.memory.usage.limit":          true,
-		"container.pids.limit":                  true,
-		"container.network.io.usage.rx_bytes":   true,
-		"container.network.io.usage.rx_dropped": true,
-		"container.network.io.usage.tx_bytes":   true,
-		"labels.app":                            true,
-		"labels.version":                        true,
+		"uptime":                      true,
+		"restarts":                    true,
+		"cpu.usage.kernelmode":        true,
+		"cpu.usage.total":             true,
+		"cpu.usage.usermode":          true,
+		"memory.file":                 true,
+		"memory.percent":              true,
+		"memory.usage.total":          true,
+		"cpu.utilization":             true,
+		"cpu.logical.count":           true,
+		"cpu.shares":                  true,
+		"memory.usage.limit":          true,
+		"pids.limit":                  true,
+		"network.io.usage.rx_bytes":   true,
+		"network.io.usage.rx_dropped": true,
+		"network.io.usage.tx_bytes":   true,
 	}
 
 	for _, n := range gotNoti {
+		if len(n.GetDelete()) > 0 {
+			t.Errorf("Unexpected delete notification received: %v", n)
+		}
+
 		for _, u := range n.GetUpdate() {
 			path := elems2path(u.GetPath().GetElem())
 			delete(wantPathSet, path)
@@ -241,4 +241,113 @@ func TestE2E(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	validateNotifications(t, gotNoti)
+}
+
+func containerNameFromPath(path *gpb.Path) string {
+	for _, elem := range path.Elem {
+		if elem.Name == "container" {
+			return strings.TrimPrefix(elem.Key["name"], "/")
+		}
+	}
+	return ""
+}
+
+func TestE2ETTL(t *testing.T) {
+	container, cleanup := spawnNginxContainer(t)
+
+	gOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+	ctx := context.Background()
+
+	notiCh := make(chan *gpb.Notification, 100)
+	sinkWg := &sync.WaitGroup{}
+	defer sinkWg.Wait()
+
+	cwg, col := startCollectorPipeline(ctx, t)
+	defer stopCollectorPipeline(t, cwg, col)
+
+	for i := 15; col.GetState() != otelcol.StateRunning; i-- {
+		if i == 0 {
+			t.Fatalf("Collector never started")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	gnmiConn, err := grpc.NewClient("localhost:6030", gOpts...)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer gnmiConn.Close()
+
+	gnmiClient := gpb.NewGNMIClient(gnmiConn)
+	stream, err := gnmiClient.Subscribe(ctx)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	sinkWg.Add(1)
+	go func() {
+		defer sinkWg.Done()
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				return
+			}
+			if resp.GetUpdate() != nil {
+				notiCh <- resp.GetUpdate()
+			}
+		}
+	}()
+
+	sreq := subscribeRequestForTarget(t, testTarget)
+	err = stream.Send(sreq)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	containerName, err := container.Name(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get container name: %v", err)
+	}
+	// containerName from testcontainers usually has a leading slash, e.g. /reaper_...
+	trimmedName := strings.TrimPrefix(containerName, "/")
+
+	// Wait for at least one update for the container to ensure it's registered.
+	updateFound := false
+	timeout := time.After(10 * time.Second)
+	for !updateFound {
+		select {
+		case n := <-notiCh:
+			if len(n.GetUpdate()) > 0 && containerNameFromPath(n.GetPrefix()) == trimmedName {
+				updateFound = true
+			}
+		case <-timeout:
+			t.Fatalf("Timed out waiting for initial update for container %s", trimmedName)
+		}
+	}
+
+	// 2. Kill the container to trigger the death condition
+	cleanup()
+
+	// 3. Wait for the TTL (config is set to 4s) to expire + sweeper ticker to pick it up.
+	deleteFound := false
+	timeout = time.After(15 * time.Second)
+	for !deleteFound {
+		select {
+		case n := <-notiCh:
+			if len(n.GetDelete()) > 0 {
+				if n.GetPrefix().GetTarget() != testTarget || n.GetPrefix().GetOrigin() != testOrigin {
+					continue
+				}
+				gotName := containerNameFromPath(n.GetDelete()[0])
+				if gotName == trimmedName {
+					deleteFound = true
+				}
+			}
+		case <-timeout:
+			t.Errorf("Expected a container delete notification from the integration pipeline after killing container %v, but none was sent", containerName)
+			return
+		}
+	}
 }

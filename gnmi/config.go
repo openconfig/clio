@@ -16,6 +16,7 @@ package gnmi
 
 import (
 	"go.opentelemetry.io/collector/component"
+	"time"
 )
 
 // Config holds the configuration for this processor.
@@ -52,6 +53,11 @@ type Config struct {
 
 	// Origin is set as the origin of gNMI notifications.
 	Origin string `mapstructure:"origin"`
+
+	// ContainerTTL is the time after which a container with no new docker_stats metrics is considered dead and purged.
+	// This should be set to a value greater than the docker_stats collection interval.
+	// If set to 0, no delete notifications will be sent.
+	ContainerTTL time.Duration `mapstructure:"container_ttl"`
 }
 
 var _ component.Config = (*Config)(nil)

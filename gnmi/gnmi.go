@@ -17,24 +17,22 @@ package gnmi
 import (
 	"context"
 	"fmt"
-	"net"
-	"strings"
-	"time"
-
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
-	ompb "go.opentelemetry.io/proto/otlp/metrics/v1"
-	anypb "google.golang.org/protobuf/types/known/anypb"
-
 	"github.com/openconfig/magna/lwotgtelem"
 	"github.com/openconfig/magna/lwotgtelem/gnmit"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	ompb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 	"k8s.io/klog/v2"
+	"net"
+	"strings"
+	"time"
 )
 
 // GNMI is a gNMI exporter.
@@ -422,53 +420,103 @@ func (g *GNMI) notificationsFromLabels(m pcommon.Map, cname string) []*gpb.Notif
 // and sent to the telemetry server.
 func (g *GNMI) handleMetrics(_ gnmit.Queue, updateFn gnmit.UpdateFn, target string, cleanup func()) error {
 	go func() {
-		for ms := range g.metricCh {
-			var notis []*gpb.Notification
+		var tickerCh <-chan time.Time
+		if g.cfg.ContainerTTL > 0 {
+			ticker := time.NewTicker(g.cfg.ContainerTTL / 2)
+			defer ticker.Stop()
+			tickerCh = ticker.C
+		} else {
+			tickerCh = make(chan time.Time)
+		}
 
-			// Iterate over all resources (e.g., app).
-			rms := ms.ResourceMetrics()
-			for i := 0; i < rms.Len(); i++ {
-				rm := rms.At(i)
-				cname := ""
-
-				// Extract container name from resource, if not found, log error and continue.
-				cNameVal, ok := rm.Resource().Attributes().Get("container.name")
-				if ok && cNameVal.Type() == pcommon.ValueTypeStr {
-					cname = cNameVal.Str()
-				} else {
-					g.logger.Error("resource is not associated with a container name formatted as a string", zap.String("resource", fmt.Sprintf("%+v", rm.Resource().Attributes().AsRaw())))
-					continue
+		lastSeen := make(map[string]time.Time)
+		for {
+			select {
+			case ms, ok := <-g.metricCh:
+				if !ok {
+					return
 				}
-
-				// Iterate over all instrument scopes within the resource (e.g., module within an app).
-				ilms := rm.ScopeMetrics()
-				for j := 0; j < ilms.Len(); j++ {
-					ilm := ilms.At(j)
-
-					// Iterate over all metrics for the instrument scope.
-					ms := ilm.Metrics()
-					for k := 0; k < ms.Len(); k++ {
-						m := ms.At(k)
-						notis = append(notis, g.notificationsFromMetric(m, cname)...)
-					}
-				}
-
-				// Obtain notifications for labels.
-				lmap, ok := rm.Resource().Attributes().Get("container.labels")
-				if ok && lmap.Type() == pcommon.ValueTypeMap && len(notis) > 0 {
-					notis = append(notis, g.notificationsFromLabels(lmap.Map(), cname)...)
-				}
-			}
-
-			// Send all notifications.
-			for _, notification := range notis {
-				if err := updateFn(notification); err != nil {
-					klog.Errorf("failed to send notification: %v", err)
-				}
+				g.processMetrics(ms, updateFn, lastSeen)
+			case now := <-tickerCh:
+				g.sweepStaleContainers(now, updateFn, lastSeen)
 			}
 		}
 	}()
 	return nil
+}
+
+func (g *GNMI) processMetrics(ms *pmetric.Metrics, updateFn gnmit.UpdateFn, lastSeen map[string]time.Time) {
+	now := time.Now()
+	var notis []*gpb.Notification
+
+	// Iterate over all resources (e.g., app).
+	rms := ms.ResourceMetrics()
+	for i := 0; i < rms.Len(); i++ {
+		rm := rms.At(i)
+		cname := ""
+
+		// Extract container name from resource, if not found, log error and continue.
+		cNameVal, ok := rm.Resource().Attributes().Get("container.name")
+		if ok && cNameVal.Type() == pcommon.ValueTypeStr {
+			cname = cNameVal.Str()
+		} else {
+			g.logger.Error("resource is not associated with a container name formatted as a string", zap.String("resource", fmt.Sprintf("%+v", rm.Resource().Attributes().AsRaw())))
+			continue
+		}
+
+		// Iterate over all instrument scopes within the resource (e.g., module within an app).
+		ilms := rm.ScopeMetrics()
+		for j := 0; j < ilms.Len(); j++ {
+			ilm := ilms.At(j)
+
+			// Iterate over all metrics for the instrument scope.
+			ms := ilm.Metrics()
+			if ms.Len() > 0 {
+				// We refresh the TTL whenever we see any container-related metric.
+				lastSeen[cname] = now
+			}
+			for k := 0; k < ms.Len(); k++ {
+				m := ms.At(k)
+				notis = append(notis, g.notificationsFromMetric(m, cname)...)
+			}
+		}
+
+		// Obtain notifications for labels.
+		lmap, ok := rm.Resource().Attributes().Get("container.labels")
+		if ok && lmap.Type() == pcommon.ValueTypeMap && len(notis) > 0 {
+			notis = append(notis, g.notificationsFromLabels(lmap.Map(), cname)...)
+		}
+	}
+
+	// Send all notifications.
+	for _, notification := range notis {
+		if err := updateFn(notification); err != nil {
+			klog.Errorf("failed to send notification: %v", err)
+		}
+	}
+}
+
+func (g *GNMI) sweepStaleContainers(now time.Time, updateFn gnmit.UpdateFn, lastSeen map[string]time.Time) {
+	for cname, t := range lastSeen {
+		if now.Sub(t) > g.cfg.ContainerTTL {
+			delete(lastSeen, cname)
+			noti := &gpb.Notification{
+				Timestamp: now.UnixNano(),
+				Prefix: &gpb.Path{
+					Origin: g.cfg.Origin,
+					Target: g.cfg.TargetName,
+					Elem: []*gpb.PathElem{
+						{Name: "containers"},
+						{Name: "container", Key: map[string]string{"name": cname}},
+					},
+				},
+				Delete: []*gpb.Path{{}},
+			}
+			if err := updateFn(noti); err != nil {
+				klog.Errorf("failed to send delete notification: %v", err)
+			}
+		}
+	}
 }
 
 func (g *GNMI) toPathElems(name string, attrs attrMap) []*gpb.PathElem {
